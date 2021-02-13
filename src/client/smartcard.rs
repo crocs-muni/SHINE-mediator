@@ -1,9 +1,11 @@
 use crate::client::Client;
 use pcsc::Card;
 use log::{info, warn};
+use std::convert::TryInto;
 
 pub struct SmartcardClient {
-    card: Card
+    card: Card,
+    rapdu: [u8; pcsc::MAX_BUFFER_SIZE]
 }
 
 fn make_apdu(cla: u8, ins: u8, p1: u8, p2: u8, data: Option<&[u8]>) -> Vec<u8> {
@@ -34,14 +36,25 @@ fn select_applet(card: &mut Card, aid: &[u8]) -> Result<(), String> {
 impl SmartcardClient {
     pub fn new(mut card: Card) -> Result<SmartcardClient, String> {
         match select_applet(&mut card, b"jcmusig2app") {
-            Ok(_) => Ok(SmartcardClient { card }),
+            Ok(_) => Ok(SmartcardClient { card, rapdu: [0; pcsc::MAX_BUFFER_SIZE] }),
             Err(e) => Err(e)
         }
+    }
+
+    fn send_apdu(&mut self, apdu: &[u8]) -> Result<(u16, &[u8]), pcsc::Error> {
+        self.card.transmit(apdu, &mut self.rapdu).map(|bytes| {
+            let (rest, code) = bytes.split_at(bytes.len() - std::mem::size_of::<u16>());
+            (u16::from_be_bytes(code.try_into().unwrap()), rest)
+        })
     }
 }
 
 impl Client for SmartcardClient {
-    fn get_version(&self) -> String {
-        String::from("SmartCard MPC 0.1")
+    fn get_info(&mut self) -> Result<String, String> {
+        if let Ok((_code, resp)) = self.send_apdu(b"\xc2\xf0\x00\x00") {
+            Ok(std::str::from_utf8(resp).map(String::from).unwrap())
+        } else {
+            Err(String::from("Unknown Version"))
+        }
     }
 }

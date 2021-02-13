@@ -52,6 +52,10 @@ fn main() -> Result<(), String> {
         }
     }
 
+    for mut client in state.clients {
+        println!("{}", client.get_info().unwrap());
+    }
+
     info!("Terminating");
     Ok(())
 }

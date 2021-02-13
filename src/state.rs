@@ -1,7 +1,7 @@
 use crate::client::Client;
 
 pub struct State {
-    clients: Vec<Box<dyn Client>>
+    pub clients: Vec<Box<dyn Client>>
 }
 
 impl State {
