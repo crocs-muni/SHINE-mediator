@@ -62,4 +62,16 @@ impl Client for SmartcardClient {
     fn get_identity_key(&mut self) -> PublicKey {
         unimplemented!()
     }
+
+    fn keygen_initialize(&mut self, _group_size: usize) -> Vec<u8> {
+        unimplemented!()
+    }
+
+    fn keygen_reveal(&mut self, _commitments: Vec<Vec<u8>>) -> PublicKey {
+        unimplemented!()
+    }
+
+    fn keygen_finalize(&mut self, _public_keys: Vec<PublicKey>) -> PublicKey {
+        unimplemented!()
+    }
 }
