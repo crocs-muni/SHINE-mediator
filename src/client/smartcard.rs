@@ -2,7 +2,7 @@ use crate::client::Client;
 use pcsc::Card;
 use log::{info, warn};
 use std::convert::TryInto;
-use p256::AffinePoint;
+use p256::PublicKey;
 
 pub struct SmartcardClient {
     card: Card,
@@ -59,7 +59,7 @@ impl Client for SmartcardClient {
         }
     }
 
-    fn get_identity_key(&mut self) -> AffinePoint {
+    fn get_identity_key(&mut self) -> PublicKey {
         unimplemented!()
     }
 }

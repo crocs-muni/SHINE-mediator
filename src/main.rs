@@ -56,7 +56,7 @@ fn main() -> Result<(), String> {
 
     for mut client in state.clients {
         println!("{}", client.get_info().unwrap());
-        println!("{}", hex::encode(client.get_public_key().to_encoded_point(false).as_bytes()));
+        println!("{}", hex::encode(client.get_identity_key().to_encoded_point(false).as_bytes()));
     }
 
     info!("Terminating");
