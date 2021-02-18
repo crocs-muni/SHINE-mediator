@@ -10,3 +10,5 @@ edition = "2018"
 pcsc = "2"
 log = "0.4"
 env_logger = "0.8"
+p256 = { version = "0.8.0-pre", features = ["arithmetic"] }
+hex = "0.4.2"

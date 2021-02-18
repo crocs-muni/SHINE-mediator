@@ -2,6 +2,7 @@ use crate::client::Client;
 use pcsc::Card;
 use log::{info, warn};
 use std::convert::TryInto;
+use p256::AffinePoint;
 
 pub struct SmartcardClient {
     card: Card,
@@ -35,7 +36,7 @@ fn select_applet(card: &mut Card, aid: &[u8]) -> Result<(), String> {
 
 impl SmartcardClient {
     pub fn new(mut card: Card) -> Result<SmartcardClient, String> {
-        match select_applet(&mut card, b"jcmusig2app") {
+        match select_applet(&mut card, b"mpcapplet") {
             Ok(_) => Ok(SmartcardClient { card, rapdu: [0; pcsc::MAX_BUFFER_SIZE] }),
             Err(e) => Err(e)
         }
@@ -56,5 +57,9 @@ impl Client for SmartcardClient {
         } else {
             Err(String::from("Unknown Version"))
         }
+    }
+
+    fn get_identity_key(&mut self) -> AffinePoint {
+        unimplemented!()
     }
 }

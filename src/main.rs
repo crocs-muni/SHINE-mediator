@@ -1,11 +1,12 @@
 mod state;
 mod client;
 
-use client::SmartcardClient;
+use client::{SimulatedClient, SmartcardClient};
 use state::State;
 
 use log::{info, error};
 use pcsc::{Context, Scope, ShareMode, Protocols};
+use p256::elliptic_curve::sec1::ToEncodedPoint;
 
 fn main() -> Result<(), String> {
     env_logger::init();
@@ -51,9 +52,11 @@ fn main() -> Result<(), String> {
             state.add_client(Box::new(client));
         }
     }
+    state.add_client(Box::new(SimulatedClient::new()));
 
     for mut client in state.clients {
         println!("{}", client.get_info().unwrap());
+        println!("{}", hex::encode(client.get_public_key().to_encoded_point(false).as_bytes()));
     }
 
     info!("Terminating");
