@@ -2,7 +2,7 @@ use crate::client::Client;
 use pcsc::Card;
 use log::{info, warn};
 use std::convert::TryInto;
-use p256::PublicKey;
+use p256::{PublicKey, AffinePoint, Scalar};
 
 pub struct SmartcardClient {
     card: Card,
@@ -72,6 +72,14 @@ impl Client for SmartcardClient {
     }
 
     fn keygen_finalize(&mut self, _public_keys: Vec<PublicKey>) -> PublicKey {
+        unimplemented!()
+    }
+
+    fn cache_nonce(&mut self, _counter: u16) -> PublicKey {
+        unimplemented!()
+    }
+
+    fn sign(&mut self, _counter: u16, _nonce_point: AffinePoint, _message: [u8; 32]) -> Scalar {
         unimplemented!()
     }
 }

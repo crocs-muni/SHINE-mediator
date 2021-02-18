@@ -1,10 +1,10 @@
 mod smartcard;
-mod simulated;
+pub mod simulated;
 
 pub use smartcard::SmartcardClient;
 pub use simulated::SimulatedClient;
 
-use p256::PublicKey;
+use p256::{PublicKey, AffinePoint, Scalar};
 
 pub trait Client {
     fn get_info(&mut self) -> Result<String, String>;
@@ -13,4 +13,7 @@ pub trait Client {
     fn keygen_initialize(&mut self, group_size: usize) -> Vec<u8>;
     fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> PublicKey;
     fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> PublicKey;
+
+    fn cache_nonce(&mut self, counter: u16) -> PublicKey;
+    fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Scalar;
 }

@@ -4,9 +4,11 @@ mod client;
 use client::{SimulatedClient, SmartcardClient};
 use state::State;
 
+use std::ops::{Mul, Add};
 use log::{info, error};
 use pcsc::{Context, Scope, ShareMode, Protocols};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::{PublicKey, ProjectivePoint, Scalar};
 
 fn main() -> Result<(), String> {
     env_logger::init();
@@ -70,6 +72,15 @@ fn main() -> Result<(), String> {
     for other_group_key in group_keys {
         assert_eq!(group_key, other_group_key);
     }
+
+    let nonce_points: Vec<_> = state.clients.iter_mut().map(|x| x.cache_nonce(0)).collect();
+    let aggregate_nonce = nonce_points.iter().map(PublicKey::to_projective).fold(ProjectivePoint::identity(), |acc, x| acc + x).to_affine();
+    let message = [0; 32];
+    let signatures: Vec<_> = state.clients.iter_mut().map(|x| x.sign(0, aggregate_nonce, message)).collect();
+    let signature = signatures.iter().fold(Scalar::zero(), |acc, x| acc + x);
+
+    let challenge = client::simulated::compute_challenge(group_key, aggregate_nonce, message);
+    assert_eq!(ProjectivePoint::generator().mul(signature).add(group_key.to_projective().mul(challenge)).to_affine(), aggregate_nonce);
 
     info!("Terminating");
     Ok(())
