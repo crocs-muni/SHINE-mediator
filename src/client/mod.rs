@@ -8,7 +8,7 @@ use p256::{PublicKey, AffinePoint, Scalar};
 
 pub trait Client {
     fn get_info(&mut self) -> Result<String, String>;
-    fn get_identity_key(&mut self) -> PublicKey;
+    fn get_identity_key(&mut self) -> Result<PublicKey, String>;
 
     fn keygen_initialize(&mut self, group_size: usize) -> Vec<u8>;
     fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> PublicKey;

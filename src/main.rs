@@ -62,7 +62,7 @@ fn main() -> Result<(), String> {
 
     for client in state.clients.iter_mut() {
         println!("{}", client.get_info().unwrap());
-        println!("{}", hex::encode(client.get_identity_key().to_encoded_point(false).as_bytes()));
+        println!("{}", hex::encode(client.get_identity_key().unwrap().to_encoded_point(false).as_bytes()));
     }
 
     let commitments: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_initialize(parties)).collect();

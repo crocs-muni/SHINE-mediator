@@ -42,25 +42,26 @@ impl SmartcardClient {
         }
     }
 
-    fn send_apdu(&mut self, apdu: &[u8]) -> Result<(u16, &[u8]), pcsc::Error> {
+    fn send_apdu(&mut self, apdu: &[u8]) -> Result<(u16, &[u8]), String> {
         self.card.transmit(apdu, &mut self.rapdu).map(|bytes| {
             let (rest, code) = bytes.split_at(bytes.len() - std::mem::size_of::<u16>());
             (u16::from_be_bytes(code.try_into().unwrap()), rest)
-        })
+        }).map_err(|x| x.to_string())
     }
 }
 
 impl Client for SmartcardClient {
     fn get_info(&mut self) -> Result<String, String> {
-        if let Ok((_code, resp)) = self.send_apdu(b"\xc2\xf0\x00\x00") {
-            Ok(std::str::from_utf8(resp).map(String::from).unwrap())
-        } else {
-            Err(String::from("Unknown Version"))
-        }
+        let (_code, resp) = self.send_apdu(b"\xc0\xf0\x00\x00")?;
+        Ok(std::str::from_utf8(resp).map(String::from).unwrap())
     }
 
-    fn get_identity_key(&mut self) -> PublicKey {
-        unimplemented!()
+    fn get_identity_key(&mut self) -> Result<PublicKey, String> {
+        let (_code, resp) = self.send_apdu(b"\xc0\xf1\x00\x00")?;
+        match PublicKey::from_sec1_bytes(resp) {
+            Ok(identity_key) => Ok(identity_key),
+            Err(_) => Err(String::from("Received invalid identity key"))
+        }
     }
 
     fn keygen_initialize(&mut self, _group_size: usize) -> Vec<u8> {

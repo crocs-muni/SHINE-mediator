@@ -55,8 +55,8 @@ impl Client for SimulatedClient {
         Ok(format!("SimulatedClient {}", env!("CARGO_PKG_VERSION")))
     }
 
-    fn get_identity_key(&mut self) -> PublicKey {
-        self.identity_secret.public_key()
+    fn get_identity_key(&mut self) -> Result<PublicKey, String> {
+        Ok(self.identity_secret.public_key())
     }
 
     fn keygen_initialize(&mut self, group_size: usize) -> Vec<u8> {
