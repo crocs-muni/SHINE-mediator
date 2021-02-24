@@ -59,20 +59,20 @@ impl Client for SimulatedClient {
         Ok(self.identity_secret.public_key())
     }
 
-    fn keygen_initialize(&mut self, group_size: usize) -> Vec<u8> {
+    fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
         self.group_size = group_size;
         self.group_secret = Some(SecretKey::random(self.rng));
         let group_public = self.group_secret.as_ref().unwrap().public_key();
-        hash_point(&group_public)
+        Ok(hash_point(&group_public))
     }
 
-    fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> PublicKey {
+    fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String> {
         assert_eq!(self.group_size, commitments.len());
         self.group_commitments = commitments;
-        self.group_secret.as_ref().unwrap().public_key()
+        Ok(self.group_secret.as_ref().unwrap().public_key())
     }
 
-    fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> PublicKey {
+    fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String> {
         assert_eq!(self.group_size, public_keys.len());
         for i in 0..self.group_size {
             let hash = hash_point(&public_keys.get(i).unwrap());
@@ -88,7 +88,7 @@ impl Client for SimulatedClient {
                 .fold(ProjectivePoint::identity(), |acc, x| acc + x)
                 .to_affine()
         ).unwrap());
-        self.group_key.unwrap()
+        Ok(self.group_key.unwrap())
     }
 
     fn get_nonce(&mut self, counter: u16) -> PublicKey {

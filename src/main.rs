@@ -65,15 +65,16 @@ fn main() -> Result<(), String> {
         println!("{}", hex::encode(client.get_identity_key().unwrap().to_encoded_point(false).as_bytes()));
     }
 
-    let commitments: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_initialize(parties)).collect();
-    let public_keys: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_reveal(commitments.clone())).collect();
-    let group_keys: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_finalize(public_keys.clone())).collect();
+    let commitments: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_initialize(parties).unwrap()).collect();
+    let public_keys: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_reveal(commitments.clone()).unwrap()).collect();
+    let group_keys: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_finalize(public_keys.clone()).unwrap()).collect();
     let mut group_keys = group_keys.into_iter();
     let group_key = group_keys.next().unwrap();
     for other_group_key in group_keys {
         assert_eq!(group_key, other_group_key);
     }
 
+    /*
     let nonce_points: Vec<_> = state.clients.iter_mut().map(|x| x.get_nonce(0)).collect();
     let aggregate_nonce = nonce_points.iter().map(PublicKey::to_projective).fold(ProjectivePoint::identity(), |acc, x| acc + x).to_affine();
     let message = [0; 32];
@@ -100,7 +101,7 @@ fn main() -> Result<(), String> {
     for (plain, decrypted) in state.clients.iter_mut().map(|x| x.get_nonce(5)).zip(decrypted_nonces) {
         assert_eq!(plain, decrypted);
     }
-
+    */
     info!("Terminating");
     Ok(())
 }
