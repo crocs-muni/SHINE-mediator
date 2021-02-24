@@ -52,7 +52,7 @@ impl SimulatedClient {
 
 impl Client for SimulatedClient {
     fn get_info(&mut self) -> Result<String, String> {
-        Ok(String::from("SimulatedClient 0.1.0"))
+        Ok(format!("SimulatedClient {}", env!("CARGO_PKG_VERSION")))
     }
 
     fn get_identity_key(&mut self) -> PublicKey {
