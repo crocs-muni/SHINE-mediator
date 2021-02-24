@@ -14,6 +14,9 @@ pub trait Client {
     fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> PublicKey;
     fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> PublicKey;
 
-    fn cache_nonce(&mut self, counter: u16) -> PublicKey;
+    fn get_nonce(&mut self, counter: u16) -> PublicKey;
+    fn cache_nonce(&mut self, counter: u16) -> Vec<u8>;
+    fn reveal_nonce(&mut self, counter: u16) -> Vec<u8>;
     fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Scalar;
+    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> (Scalar, Vec<u8>);
 }

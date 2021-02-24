@@ -1,7 +1,7 @@
 use crate::client::Client;
 use p256::{PublicKey, SecretKey, ProjectivePoint, AffinePoint, Scalar};
 use rand::rngs::OsRng;
-use sha2::{Sha256, Digest};
+use sha2::{Sha256, Sha512, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
@@ -41,6 +41,12 @@ impl SimulatedClient {
         hasher.update(u16::to_be_bytes(counter));
         let output = hasher.finalize();
         SecretKey::from_bytes(&output).unwrap()
+    }
+
+    fn kdf(&self, secret: &SecretKey) -> Vec<u8> {
+        let mut hasher = Sha512::new();
+        hasher.update(secret.to_bytes());
+        hasher.finalize().to_vec()
     }
 }
 
@@ -85,9 +91,26 @@ impl Client for SimulatedClient {
         self.group_key.unwrap()
     }
 
-    fn cache_nonce(&mut self, counter: u16) -> PublicKey {
-        // TODO nonce encryption
+    fn get_nonce(&mut self, counter: u16) -> PublicKey {
+        assert!(self.cache_counter <= counter);
+        self.cache_counter = counter;
         self.prf(counter).public_key()
+    }
+
+    fn cache_nonce(&mut self, counter: u16) -> Vec<u8> {
+        let nonce = self.prf(counter);
+        let key = self.kdf(&nonce);
+        assert_eq!(key.len(), 64);
+        key.iter()
+            .zip(nonce.public_key().to_encoded_point(false).as_bytes()[1..].iter())
+            .map(|(l, r)| *l ^ *r)
+            .collect()
+    }
+
+    fn reveal_nonce(&mut self, counter: u16) -> Vec<u8> {
+        assert!(self.cache_counter <= counter);
+        self.cache_counter = counter;
+        self.kdf(&self.prf(counter))
     }
 
     fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Scalar {
@@ -97,7 +120,10 @@ impl Client for SimulatedClient {
         let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar());
         let signature = nonce.subtract(&product);
         Scalar::from_bytes_reduced(&signature.to_bytes())
-        // TODO nonce decryption piggybacking
+    }
+
+    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> (Scalar, Vec<u8>) {
+        (self.sign(counter, nonce_point, message), self.reveal_nonce(counter + 1))
     }
 }
 

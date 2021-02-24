@@ -75,11 +75,23 @@ impl Client for SmartcardClient {
         unimplemented!()
     }
 
-    fn cache_nonce(&mut self, _counter: u16) -> PublicKey {
+    fn get_nonce(&mut self, _counter: u16) -> PublicKey {
+        unimplemented!()
+    }
+
+    fn cache_nonce(&mut self, _counter: u16) -> Vec<u8> {
+        unimplemented!()
+    }
+
+    fn reveal_nonce(&mut self, _counter: u16) -> Vec<u8> {
         unimplemented!()
     }
 
     fn sign(&mut self, _counter: u16, _nonce_point: AffinePoint, _message: [u8; 32]) -> Scalar {
+        unimplemented!()
+    }
+
+    fn sign_reveal(&mut self, _counter: u16, _nonce_point: AffinePoint, _message: [u8; 32]) -> (Scalar, Vec<u8>) {
         unimplemented!()
     }
 }
