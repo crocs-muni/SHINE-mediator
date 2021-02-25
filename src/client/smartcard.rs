@@ -90,7 +90,7 @@ impl Client for SmartcardClient {
             let mut data = vec![0xc1, 0xc3, idx as u8, 0x00];
             data.push(public_key.len() as u8);
             data.extend_from_slice(&public_key);
-            self.send_apdu(&data);
+            self.send_apdu(&data)?;
         }
         let (_, resp) = self.send_apdu(&[0xc1, 0xc4, 0x00, 0x00])?;
         match PublicKey::from_sec1_bytes(resp) {
@@ -99,8 +99,14 @@ impl Client for SmartcardClient {
         }
     }
 
-    fn get_nonce(&mut self, _counter: u16) -> PublicKey {
-        unimplemented!()
+    fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {
+        let mut data = vec![0xc1, 0xc5];
+        data.extend_from_slice(&u16::to_le_bytes(counter));
+        let (_, resp) = self.send_apdu(&data)?;
+        match PublicKey::from_sec1_bytes(resp) {
+            Ok(nonce) => Ok(nonce),
+            Err(_) => Err(String::from("Received invalid nonce"))
+        }
     }
 
     fn cache_nonce(&mut self, _counter: u16) -> Vec<u8> {
@@ -111,8 +117,15 @@ impl Client for SmartcardClient {
         unimplemented!()
     }
 
-    fn sign(&mut self, _counter: u16, _nonce_point: AffinePoint, _message: [u8; 32]) -> Scalar {
-        unimplemented!()
+    fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String> {
+        let mut data = vec![0xc1, 0xc6];
+        data.extend_from_slice(&u16::to_le_bytes(counter));
+        let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
+        data.push((nonce_point.len() + message.len()) as u8);
+        data.extend_from_slice(&nonce_point);
+        data.extend_from_slice(&message);
+        let (_, resp) = self.send_apdu(&data)?;
+        Ok(Scalar::from_bytes_reduced(resp.into()))
     }
 
     fn sign_reveal(&mut self, _counter: u16, _nonce_point: AffinePoint, _message: [u8; 32]) -> (Scalar, Vec<u8>) {

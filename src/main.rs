@@ -4,7 +4,7 @@ mod client;
 use client::{SimulatedClient, SmartcardClient};
 use state::State;
 
-use std::ops::{Mul, Add};
+use std::ops::{Mul, Sub};
 use log::{info, error};
 use pcsc::{Context, Scope, ShareMode, Protocols};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
@@ -74,16 +74,16 @@ fn main() -> Result<(), String> {
         assert_eq!(group_key, other_group_key);
     }
 
-    /*
-    let nonce_points: Vec<_> = state.clients.iter_mut().map(|x| x.get_nonce(0)).collect();
+    let nonce_points: Vec<_> = state.clients.iter_mut().map(|x| x.get_nonce(0).unwrap()).collect();
     let aggregate_nonce = nonce_points.iter().map(PublicKey::to_projective).fold(ProjectivePoint::identity(), |acc, x| acc + x).to_affine();
     let message = [0; 32];
-    let signatures: Vec<_> = state.clients.iter_mut().map(|x| x.sign(0, aggregate_nonce, message)).collect();
+    let signatures: Vec<_> = state.clients.iter_mut().map(|x| x.sign(0, aggregate_nonce, message).unwrap()).collect();
     let signature = signatures.iter().fold(Scalar::zero(), |acc, x| acc + x);
 
     let challenge = client::simulated::compute_challenge(group_key, aggregate_nonce, message);
-    assert_eq!(ProjectivePoint::generator().mul(signature).add(group_key.to_projective().mul(challenge)).to_affine(), aggregate_nonce);
+    assert_eq!(ProjectivePoint::generator().mul(signature).sub(group_key.to_projective().mul(challenge)).to_affine(), aggregate_nonce);
 
+    /*
     let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.cache_nonce(5)).collect();
     let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.reveal_nonce(5)).collect();
     let mut decrypted_nonces = Vec::new();

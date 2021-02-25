@@ -91,10 +91,10 @@ impl Client for SimulatedClient {
         Ok(self.group_key.unwrap())
     }
 
-    fn get_nonce(&mut self, counter: u16) -> PublicKey {
+    fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {
         assert!(self.cache_counter <= counter);
         self.cache_counter = counter;
-        self.prf(counter).public_key()
+        Ok(self.prf(counter).public_key())
     }
 
     fn cache_nonce(&mut self, counter: u16) -> Vec<u8> {
@@ -113,17 +113,17 @@ impl Client for SimulatedClient {
         self.kdf(&self.prf(counter))
     }
 
-    fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Scalar {
+    fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String> {
         assert!(counter >= self.cache_counter);
         let &nonce = self.prf(counter).secret_scalar();
         let challenge = compute_challenge(self.group_key.unwrap(), nonce_point, message);
         let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar());
-        let signature = nonce.subtract(&product);
-        Scalar::from_bytes_reduced(&signature.to_bytes())
+        let signature = nonce.add(&product);
+        Ok(Scalar::from_bytes_reduced(&signature.to_bytes()))
     }
 
     fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> (Scalar, Vec<u8>) {
-        (self.sign(counter, nonce_point, message), self.reveal_nonce(counter + 1))
+        (self.sign(counter, nonce_point, message).unwrap(), self.reveal_nonce(counter + 1))
     }
 }
 
