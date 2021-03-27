@@ -126,8 +126,8 @@ impl Client for SimulatedClient {
         Ok(Scalar::from_bytes_reduced(&signature.to_bytes()))
     }
 
-    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> (Scalar, Vec<u8>) {
-        (self.sign(counter, nonce_point, message).unwrap(), self.reveal_nonce(counter + 1).unwrap())
+    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<(Scalar, Vec<u8>), String> {
+        Ok((self.sign(counter, nonce_point, message).unwrap(), self.reveal_nonce(counter + 1)?))
     }
 }
 

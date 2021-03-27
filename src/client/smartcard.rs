@@ -134,7 +134,17 @@ impl Client for SmartcardClient {
         Ok(Scalar::from_bytes_reduced(resp.into()))
     }
 
-    fn sign_reveal(&mut self, _counter: u16, _nonce_point: AffinePoint, _message: [u8; 32]) -> (Scalar, Vec<u8>) {
-        unimplemented!()
+    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<(Scalar, Vec<u8>), String> {
+        let mut data = vec![0xc1, 0xc9];
+        data.extend_from_slice(&u16::to_le_bytes(counter));
+        let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
+        data.push((nonce_point.len() + message.len()) as u8);
+        data.extend_from_slice(&nonce_point);
+        data.extend_from_slice(&message);
+        let (_, resp) = self.send_apdu(&data)?;
+        let (s, k) = resp.split_at(32);
+        let s = Scalar::from_bytes_reduced(s.into());
+        let k = Vec::from(k);
+        Ok((s, k))
     }
 }

@@ -97,7 +97,27 @@ fn main() -> Result<(), String> {
         decrypted_nonces.push(PublicKey::from_sec1_bytes(&point).unwrap());
     }
 
+    let nonce_points = decrypted_nonces.clone();
     for (plain, decrypted) in state.clients.iter_mut().map(|x| x.get_nonce(5).unwrap()).zip(decrypted_nonces) {
+        assert_eq!(plain, decrypted);
+    }
+
+    let aggregate_nonce = nonce_points.iter().map(PublicKey::to_projective).fold(ProjectivePoint::identity(), |acc, x| acc + x).to_affine();
+    let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.cache_nonce(6).unwrap()).collect();
+    let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.sign_reveal(5, aggregate_nonce, message).unwrap().1).collect();
+    let mut decrypted_nonces = Vec::new();
+    for (encrypted_nonce, decryption_key) in cached_nonces.iter().zip(decryption_keys.iter()) {
+        assert_eq!(encrypted_nonce.len(), decryption_key.len());
+        let mut point = vec![0x04];
+        point.extend(
+            encrypted_nonce.iter()
+                .zip(decryption_key.iter())
+                .map(|(l, r)| *l ^ *r)
+        );
+        decrypted_nonces.push(PublicKey::from_sec1_bytes(&point).unwrap());
+    }
+
+    for (plain, decrypted) in state.clients.iter_mut().map(|x| x.get_nonce(6).unwrap()).zip(decrypted_nonces) {
         assert_eq!(plain, decrypted);
     }
     info!("Terminating");
