@@ -109,12 +109,18 @@ impl Client for SmartcardClient {
         }
     }
 
-    fn cache_nonce(&mut self, _counter: u16) -> Vec<u8> {
-        unimplemented!()
+    fn cache_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
+        let mut data = vec![0xc1, 0xc7];
+        data.extend_from_slice(&u16::to_le_bytes(counter));
+        let (_, resp) = self.send_apdu(&data)?;
+        Ok(Vec::from(resp))
     }
 
-    fn reveal_nonce(&mut self, _counter: u16) -> Vec<u8> {
-        unimplemented!()
+    fn reveal_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
+        let mut data = vec![0xc1, 0xc8];
+        data.extend_from_slice(&u16::to_le_bytes(counter));
+        let (_, resp) = self.send_apdu(&data)?;
+        Ok(Vec::from(resp))
     }
 
     fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String> {

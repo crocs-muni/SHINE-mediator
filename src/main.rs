@@ -83,9 +83,8 @@ fn main() -> Result<(), String> {
     let challenge = client::simulated::compute_challenge(group_key, aggregate_nonce, message);
     assert_eq!(ProjectivePoint::generator().mul(signature).sub(group_key.to_projective().mul(challenge)).to_affine(), aggregate_nonce);
 
-    /*
-    let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.cache_nonce(5)).collect();
-    let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.reveal_nonce(5)).collect();
+    let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.cache_nonce(5).unwrap()).collect();
+    let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.reveal_nonce(5).unwrap()).collect();
     let mut decrypted_nonces = Vec::new();
     for (encrypted_nonce, decryption_key) in cached_nonces.iter().zip(decryption_keys.iter()) {
         assert_eq!(encrypted_nonce.len(), decryption_key.len());
@@ -98,10 +97,9 @@ fn main() -> Result<(), String> {
         decrypted_nonces.push(PublicKey::from_sec1_bytes(&point).unwrap());
     }
 
-    for (plain, decrypted) in state.clients.iter_mut().map(|x| x.get_nonce(5)).zip(decrypted_nonces) {
+    for (plain, decrypted) in state.clients.iter_mut().map(|x| x.get_nonce(5).unwrap()).zip(decrypted_nonces) {
         assert_eq!(plain, decrypted);
     }
-    */
     info!("Terminating");
     Ok(())
 }

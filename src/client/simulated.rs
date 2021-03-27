@@ -1,7 +1,7 @@
 use crate::client::Client;
 use p256::{PublicKey, SecretKey, ProjectivePoint, AffinePoint, Scalar};
 use rand::rngs::OsRng;
-use sha2::{Sha256, Sha512, Digest};
+use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
@@ -44,9 +44,13 @@ impl SimulatedClient {
     }
 
     fn kdf(&self, secret: &SecretKey) -> Vec<u8> {
-        let mut hasher = Sha512::new();
+        let mut hasher = Sha256::new();
         hasher.update(secret.to_bytes());
-        hasher.finalize().to_vec()
+        let mut result = hasher.finalize().to_vec();
+        let mut hasher = Sha256::new();
+        hasher.update(&result);
+        result.extend(hasher.finalize());
+        result
     }
 }
 
@@ -97,20 +101,20 @@ impl Client for SimulatedClient {
         Ok(self.prf(counter).public_key())
     }
 
-    fn cache_nonce(&mut self, counter: u16) -> Vec<u8> {
+    fn cache_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
         let nonce = self.prf(counter);
         let key = self.kdf(&nonce);
         assert_eq!(key.len(), 64);
-        key.iter()
+        Ok(key.iter()
             .zip(nonce.public_key().to_encoded_point(false).as_bytes()[1..].iter())
             .map(|(l, r)| *l ^ *r)
-            .collect()
+            .collect())
     }
 
-    fn reveal_nonce(&mut self, counter: u16) -> Vec<u8> {
+    fn reveal_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
         assert!(self.cache_counter <= counter);
         self.cache_counter = counter;
-        self.kdf(&self.prf(counter))
+        Ok(self.kdf(&self.prf(counter)))
     }
 
     fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String> {
@@ -123,7 +127,7 @@ impl Client for SimulatedClient {
     }
 
     fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> (Scalar, Vec<u8>) {
-        (self.sign(counter, nonce_point, message).unwrap(), self.reveal_nonce(counter + 1))
+        (self.sign(counter, nonce_point, message).unwrap(), self.reveal_nonce(counter + 1).unwrap())
     }
 }
 
