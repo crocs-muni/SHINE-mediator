@@ -18,5 +18,5 @@ pub trait Client {
     fn cache_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String>;
     fn reveal_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String>;
     fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String>;
-    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> (Scalar, Vec<u8>);
+    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<(Scalar, Vec<u8>), String>;
 }
