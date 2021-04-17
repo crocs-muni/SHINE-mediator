@@ -4,6 +4,7 @@ use log::{info, warn};
 use std::convert::TryInto;
 use p256::{PublicKey, AffinePoint, Scalar};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
+use crate::protocol::{NonceEncryption, KeygenCommitment};
 
 pub struct SmartcardClient {
     card: Card,
@@ -64,7 +65,9 @@ impl Client for SmartcardClient {
             Err(_) => Err(String::from("Received invalid identity key"))
         }
     }
+}
 
+impl KeygenCommitment for SmartcardClient {
     fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
         let (_, resp) = self.send_apdu(&[0xc1, 0xc0, group_size as u8, 0x00])?;
         Ok(resp.to_vec())
@@ -98,7 +101,9 @@ impl Client for SmartcardClient {
             Err(_) => Err(String::from("Received invalid group key"))
         }
     }
+}
 
+impl NonceEncryption for SmartcardClient {
     fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {
         let mut data = vec![0xc1, 0xc5];
         data.extend_from_slice(&u16::to_le_bytes(counter));

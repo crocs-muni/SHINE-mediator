@@ -1,5 +1,6 @@
 mod state;
 mod client;
+mod protocol;
 
 use client::{SimulatedClient, SmartcardClient};
 use state::State;

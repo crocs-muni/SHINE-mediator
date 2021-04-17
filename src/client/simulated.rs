@@ -5,39 +5,40 @@ use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
+use crate::protocol::{NonceEncryption, KeygenCommitment};
 
 pub struct SimulatedClient {
     rng: OsRng,
     identity_secret: SecretKey,
-    caching_secret: Vec<u8>,
     group_size: usize,
     group_secret: Option<SecretKey>,
     group_commitments: Vec<Vec<u8>>,
     group_key: Option<PublicKey>,
+    cache_secret: Vec<u8>,
     cache_counter: u16
 }
 
 impl SimulatedClient {
     pub fn new() -> Self {
         let mut rng = OsRng::default();
-        let mut caching_secret = Vec::with_capacity(32);
-        caching_secret.resize(32, 0);
-        rng.fill_bytes(&mut caching_secret);
+        let mut cache_secret = Vec::with_capacity(32);
+        cache_secret.resize(32, 0);
+        rng.fill_bytes(&mut cache_secret);
         SimulatedClient {
             rng,
             identity_secret: SecretKey::random(rng),
-            caching_secret,
             group_size: 0,
             group_secret: None,
             group_commitments: Vec::new(),
             group_key: None,
+            cache_secret,
             cache_counter: 0
         }
     }
 
     fn prf(&self, counter: u16) -> SecretKey {
         let mut hasher = Sha256::new();
-        hasher.update(&self.caching_secret);
+        hasher.update(&self.cache_secret);
         hasher.update(u16::to_be_bytes(counter));
         let output = hasher.finalize();
         SecretKey::from_bytes(&output).unwrap()
@@ -63,6 +64,9 @@ impl Client for SimulatedClient {
         Ok(self.identity_secret.public_key())
     }
 
+}
+
+impl KeygenCommitment for SimulatedClient {
     fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
         self.group_size = group_size;
         self.group_secret = Some(SecretKey::random(self.rng));
@@ -94,7 +98,9 @@ impl Client for SimulatedClient {
         ).unwrap());
         Ok(self.group_key.unwrap())
     }
+}
 
+impl NonceEncryption for SimulatedClient {
     fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {
         assert!(self.cache_counter <= counter);
         self.cache_counter = counter;
