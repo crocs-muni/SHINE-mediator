@@ -5,7 +5,7 @@ use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
-use crate::protocol::{NonceEncryption, KeygenCommitment, Protocol, ProtocolData, KeygenCommitmentData};
+use crate::protocol::{KeygenCommitment, Protocol, ProtocolData, KeygenCommitmentData, SchnorrSerial, SchnorrSerialData};
 
 pub struct SimulatedClient {
     rng: OsRng,
@@ -87,6 +87,53 @@ impl SimulatedClient {
             }
         }
     }
+
+    fn handle_schnorr_serial(&mut self, message: SchnorrSerial) -> SchnorrSerialData {
+        match message {
+            SchnorrSerial::GetNonce(counter) => {
+                assert!(self.cache_counter <= counter);
+                self.cache_counter = counter;
+                SchnorrSerialData::Nonce(self.prf(counter).public_key())
+            },
+            SchnorrSerial::CacheNonce(counter) => {
+                let nonce = self.prf(counter);
+                let key = self.kdf(&nonce);
+                assert_eq!(key.len(), 64);
+                SchnorrSerialData::EncryptedNonce(key.iter()
+                    .zip(nonce.public_key().to_encoded_point(false).as_bytes()[1..].iter())
+                    .map(|(l, r)| *l ^ *r)
+                    .collect())
+
+            },
+            SchnorrSerial::RevealNonce(counter) => {
+                SchnorrSerialData::NonceKey(self.schnorr_reveal(counter))
+            },
+            SchnorrSerial::Sign(counter, nonce_point, message) => {
+                SchnorrSerialData::Signature(self.schnorr_sign(counter, nonce_point, message))
+            },
+            SchnorrSerial::SignReveal(counter, nonce_point, message) => {
+                SchnorrSerialData::SignatureNonceKey(
+                    self.schnorr_sign(counter, nonce_point, message),
+                    self.schnorr_reveal(counter + 1)
+                )
+            }
+        }
+    }
+
+    fn schnorr_sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Scalar {
+        assert!(counter >= self.cache_counter);
+        let &nonce = self.prf(counter).secret_scalar();
+        let challenge = compute_challenge(self.group_key.unwrap(), nonce_point, message);
+        let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
+        let signature = nonce.add(&product);
+        Scalar::from_bytes_reduced(&signature.to_bytes())
+    }
+
+    fn schnorr_reveal(&mut self, counter: u16) -> Vec<u8> {
+        assert!(self.cache_counter <= counter);
+        self.cache_counter = counter;
+        self.kdf(&self.prf(counter))
+    }
 }
 
 impl Client for SimulatedClient {
@@ -101,79 +148,8 @@ impl Client for SimulatedClient {
     fn process(&mut self, msg: Protocol) -> ProtocolData {
         match msg {
             Protocol::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
-            _ => ProtocolData::KeygenCommitment(KeygenCommitmentData::Commitment(Vec::new())),
+            Protocol::SchnorrSerial(msg) => ProtocolData::SchnorrSerial(self.handle_schnorr_serial(msg)),
         }
-    }
-}
-
-// impl KeygenCommitment for SimulatedClient {
-//     fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
-//         self.group_size = group_size;
-//         self.group_secret = Some(SecretKey::random(self.rng));
-//         let group_public = self.group_secret.as_ref().unwrap().public_key();
-//         Ok(hash_point(&group_public))
-//     }
-//
-//     fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String> {
-//         assert_eq!(self.group_size, commitments.len());
-//         self.group_commitments = commitments;
-//         Ok(self.group_secret.as_ref().unwrap().public_key())
-//     }
-//
-//     fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String> {
-//         assert_eq!(self.group_size, public_keys.len());
-//         for i in 0..self.group_size {
-//             let hash = hash_point(&public_keys.get(i).unwrap());
-//             let commitment = self.group_commitments.get(i).unwrap();
-//             assert_eq!(hash.len(), commitment.len());
-//             for (l, r) in hash.iter().zip(commitment) {
-//                 assert_eq!(l, r);
-//             }
-//         }
-//         self.group_key = Some(PublicKey::from_affine(
-//             public_keys.iter()
-//                 .map(PublicKey::to_projective)
-//                 .fold(ProjectivePoint::identity(), |acc, x| acc + x)
-//                 .to_affine()
-//         ).unwrap());
-//         Ok(self.group_key.unwrap())
-//     }
-// }
-
-impl NonceEncryption for SimulatedClient {
-    fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {
-        assert!(self.cache_counter <= counter);
-        self.cache_counter = counter;
-        Ok(self.prf(counter).public_key())
-    }
-
-    fn cache_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
-        let nonce = self.prf(counter);
-        let key = self.kdf(&nonce);
-        assert_eq!(key.len(), 64);
-        Ok(key.iter()
-            .zip(nonce.public_key().to_encoded_point(false).as_bytes()[1..].iter())
-            .map(|(l, r)| *l ^ *r)
-            .collect())
-    }
-
-    fn reveal_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
-        assert!(self.cache_counter <= counter);
-        self.cache_counter = counter;
-        Ok(self.kdf(&self.prf(counter)))
-    }
-
-    fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String> {
-        assert!(counter >= self.cache_counter);
-        let &nonce = self.prf(counter).secret_scalar();
-        let challenge = compute_challenge(self.group_key.unwrap(), nonce_point, message);
-        let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar());
-        let signature = nonce.add(&product);
-        Ok(Scalar::from_bytes_reduced(&signature.to_bytes()))
-    }
-
-    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<(Scalar, Vec<u8>), String> {
-        Ok((self.sign(counter, nonce_point, message).unwrap(), self.reveal_nonce(counter + 1)?))
     }
 }
 

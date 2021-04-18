@@ -5,9 +5,9 @@ pub use smartcard::SmartcardClient;
 pub use simulated::SimulatedClient;
 
 use p256::PublicKey;
-use crate::protocol::{NonceEncryption, Protocol, ProtocolData};
+use crate::protocol::{Protocol, ProtocolData};
 
-pub trait Client : NonceEncryption {
+pub trait Client {
     fn get_info(&mut self) -> Result<String, String>;
     fn get_identity_key(&mut self) -> Result<PublicKey, String>;
 

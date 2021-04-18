@@ -10,7 +10,7 @@ use log::{info, error};
 use pcsc::{Context, Scope, ShareMode, Protocols};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::{PublicKey, ProjectivePoint, Scalar};
-use crate::protocol::{KeygenCommitment, Protocol};
+use crate::protocol::{KeygenCommitment, Protocol, SchnorrSerial, ProtocolData, SchnorrSerialData};
 
 fn main() -> Result<(), String> {
     env_logger::init();
@@ -79,17 +79,21 @@ fn main() -> Result<(), String> {
         assert_eq!(group_key, other_group_key);
     }
 
-    let nonce_points: Vec<_> = state.clients.iter_mut().map(|x| x.get_nonce(0).unwrap()).collect();
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::GetNonce(0));
+    let nonce_points: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_public_key()).collect();
     let aggregate_nonce = nonce_points.iter().map(PublicKey::to_projective).fold(ProjectivePoint::identity(), |acc, x| acc + x).to_affine();
     let message = [0; 32];
-    let signatures: Vec<_> = state.clients.iter_mut().map(|x| x.sign(0, aggregate_nonce, message).unwrap()).collect();
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::Sign(0, aggregate_nonce, message));
+    let signatures: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_scalar()).collect();
     let signature = signatures.iter().fold(Scalar::zero(), |acc, x| acc + x);
 
     let challenge = client::simulated::compute_challenge(group_key, aggregate_nonce, message);
     assert_eq!(ProjectivePoint::generator().mul(signature).sub(group_key.to_projective().mul(challenge)).to_affine(), aggregate_nonce);
 
-    let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.cache_nonce(5).unwrap()).collect();
-    let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.reveal_nonce(5).unwrap()).collect();
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::CacheNonce(5));
+    let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_bytes()).collect();
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::RevealNonce(5));
+    let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_bytes()).collect();
     let mut decrypted_nonces = Vec::new();
     for (encrypted_nonce, decryption_key) in cached_nonces.iter().zip(decryption_keys.iter()) {
         assert_eq!(encrypted_nonce.len(), decryption_key.len());
@@ -103,13 +107,22 @@ fn main() -> Result<(), String> {
     }
 
     let nonce_points = decrypted_nonces.clone();
-    for (plain, decrypted) in state.clients.iter_mut().map(|x| x.get_nonce(5).unwrap()).zip(decrypted_nonces) {
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::GetNonce(5));
+    for (plain, decrypted) in state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_public_key()).zip(decrypted_nonces) {
         assert_eq!(plain, decrypted);
     }
 
+
     let aggregate_nonce = nonce_points.iter().map(PublicKey::to_projective).fold(ProjectivePoint::identity(), |acc, x| acc + x).to_affine();
-    let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.cache_nonce(6).unwrap()).collect();
-    let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.sign_reveal(5, aggregate_nonce, message).unwrap().1).collect();
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::CacheNonce(6));
+    let cached_nonces: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_bytes()).collect();
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::SignReveal(5, aggregate_nonce, message));
+    let decryption_keys: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone())).map(|x| {
+        match x {
+            ProtocolData::SchnorrSerial(SchnorrSerialData::SignatureNonceKey(sign, decryption_key)) => decryption_key,
+            _ => panic!(),
+        }
+    }).collect();
     let mut decrypted_nonces = Vec::new();
     for (encrypted_nonce, decryption_key) in cached_nonces.iter().zip(decryption_keys.iter()) {
         assert_eq!(encrypted_nonce.len(), decryption_key.len());
@@ -122,7 +135,8 @@ fn main() -> Result<(), String> {
         decrypted_nonces.push(PublicKey::from_sec1_bytes(&point).unwrap());
     }
 
-    for (plain, decrypted) in state.clients.iter_mut().map(|x| x.get_nonce(6).unwrap()).zip(decrypted_nonces) {
+    let msg = Protocol::SchnorrSerial(SchnorrSerial::GetNonce(6));
+    for (plain, decrypted) in state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_public_key()).zip(decrypted_nonces) {
         assert_eq!(plain, decrypted);
     }
     info!("Terminating");

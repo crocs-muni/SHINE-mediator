@@ -4,7 +4,7 @@ use log::{info, warn};
 use std::convert::TryInto;
 use p256::{PublicKey, AffinePoint, Scalar};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
-use crate::protocol::{NonceEncryption, KeygenCommitment, Protocol, ProtocolData, KeygenCommitmentData};
+use crate::protocol::{KeygenCommitment, Protocol, ProtocolData, KeygenCommitmentData, SchnorrSerialData, SchnorrSerial};
 
 pub struct SmartcardClient {
     card: Card,
@@ -80,6 +80,53 @@ impl SmartcardClient {
             }
         }
     }
+
+    fn handle_schnorr_serial(&mut self, message: SchnorrSerial) -> SchnorrSerialData {
+        match message {
+            SchnorrSerial::GetNonce(counter) => {
+                let mut data = vec![0xc1, 0xc5];
+                data.extend_from_slice(&u16::to_le_bytes(counter));
+                let (_, resp) = self.send_apdu(&data).unwrap();
+                SchnorrSerialData::Nonce(PublicKey::from_sec1_bytes(resp).unwrap())
+            },
+            SchnorrSerial::CacheNonce(counter) => {
+                let mut data = vec![0xc1, 0xc7];
+                data.extend_from_slice(&u16::to_le_bytes(counter));
+                let (_, resp) = self.send_apdu(&data).unwrap();
+                SchnorrSerialData::EncryptedNonce(Vec::from(resp))
+            },
+            SchnorrSerial::RevealNonce(counter) => {
+                let mut data = vec![0xc1, 0xc8];
+                data.extend_from_slice(&u16::to_le_bytes(counter));
+                let (_, resp) = self.send_apdu(&data).unwrap();
+                SchnorrSerialData::NonceKey(Vec::from(resp))
+            },
+            SchnorrSerial::Sign(counter, nonce_point, message) => {
+                let mut data = vec![0xc1, 0xc6];
+                data.extend_from_slice(&u16::to_le_bytes(counter));
+                let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
+                data.push((nonce_point.len() + message.len()) as u8);
+                data.extend_from_slice(&nonce_point);
+                data.extend_from_slice(&message);
+                let (_, resp) = self.send_apdu(&data).unwrap();
+                SchnorrSerialData::Signature(Scalar::from_bytes_reduced(resp.into()))
+            },
+            SchnorrSerial::SignReveal(counter, nonce_point, message) => {
+                let mut data = vec![0xc1, 0xc9];
+                data.extend_from_slice(&u16::to_le_bytes(counter));
+                let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
+                data.push((nonce_point.len() + message.len()) as u8);
+                data.extend_from_slice(&nonce_point);
+                data.extend_from_slice(&message);
+                let (_, resp) = self.send_apdu(&data).unwrap();
+                let (s, k) = resp.split_at(32);
+                let s = Scalar::from_bytes_reduced(s.into());
+                let k = Vec::from(k);
+                SchnorrSerialData::SignatureNonceKey(s, k)
+
+            }
+        }
+    }
 }
 
 impl Client for SmartcardClient {
@@ -99,94 +146,7 @@ impl Client for SmartcardClient {
     fn process(&mut self, msg: Protocol) -> ProtocolData {
         match msg {
             Protocol::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
-            _ => ProtocolData::KeygenCommitment(KeygenCommitmentData::Commitment(Vec::new())),
+            Protocol::SchnorrSerial(msg) => ProtocolData::SchnorrSerial(self.handle_schnorr_serial(msg)),
         }
-    }
-}
-
-// impl KeygenCommitment for SmartcardClient {
-//     fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
-//         let (_, resp) = self.send_apdu(&[0xc1, 0xc0, group_size as u8, 0x00])?;
-//         Ok(resp.to_vec())
-//     }
-
-    // fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String> {
-    //     for (idx, commitment) in commitments.iter().enumerate() {
-    //         let mut data = vec![0xc1, 0xc1, idx as u8, 0x00];
-    //         data.push(commitment.len() as u8);
-    //         data.extend_from_slice(commitment);
-    //         self.send_apdu(&data)?;
-    //     }
-    //     let (_, resp) = self.send_apdu(&[0xc1, 0xc2, 0x00, 0x00])?;
-    //     match PublicKey::from_sec1_bytes(resp) {
-    //         Ok(public_key) => Ok(public_key),
-    //         Err(_) => Err(String::from("Received invalid public key"))
-    //     }
-    // }
-
-//     fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String> {
-//         for (idx, public_key) in public_keys.iter().enumerate() {
-//             let public_key = public_key.to_encoded_point(false).as_bytes().to_vec();
-//             let mut data = vec![0xc1, 0xc3, idx as u8, 0x00];
-//             data.push(public_key.len() as u8);
-//             data.extend_from_slice(&public_key);
-//             self.send_apdu(&data)?;
-//         }
-//         let (_, resp) = self.send_apdu(&[0xc1, 0xc4, 0x00, 0x00])?;
-//         match PublicKey::from_sec1_bytes(resp) {
-//             Ok(public_key) => Ok(public_key),
-//             Err(_) => Err(String::from("Received invalid group key"))
-//         }
-//     }
-// }
-
-impl NonceEncryption for SmartcardClient {
-    fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {
-        let mut data = vec![0xc1, 0xc5];
-        data.extend_from_slice(&u16::to_le_bytes(counter));
-        let (_, resp) = self.send_apdu(&data)?;
-        match PublicKey::from_sec1_bytes(resp) {
-            Ok(nonce) => Ok(nonce),
-            Err(_) => Err(String::from("Received invalid nonce"))
-        }
-    }
-
-    fn cache_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
-        let mut data = vec![0xc1, 0xc7];
-        data.extend_from_slice(&u16::to_le_bytes(counter));
-        let (_, resp) = self.send_apdu(&data)?;
-        Ok(Vec::from(resp))
-    }
-
-    fn reveal_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String> {
-        let mut data = vec![0xc1, 0xc8];
-        data.extend_from_slice(&u16::to_le_bytes(counter));
-        let (_, resp) = self.send_apdu(&data)?;
-        Ok(Vec::from(resp))
-    }
-
-    fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String> {
-        let mut data = vec![0xc1, 0xc6];
-        data.extend_from_slice(&u16::to_le_bytes(counter));
-        let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
-        data.push((nonce_point.len() + message.len()) as u8);
-        data.extend_from_slice(&nonce_point);
-        data.extend_from_slice(&message);
-        let (_, resp) = self.send_apdu(&data)?;
-        Ok(Scalar::from_bytes_reduced(resp.into()))
-    }
-
-    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<(Scalar, Vec<u8>), String> {
-        let mut data = vec![0xc1, 0xc9];
-        data.extend_from_slice(&u16::to_le_bytes(counter));
-        let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
-        data.push((nonce_point.len() + message.len()) as u8);
-        data.extend_from_slice(&nonce_point);
-        data.extend_from_slice(&message);
-        let (_, resp) = self.send_apdu(&data)?;
-        let (s, k) = resp.split_at(32);
-        let s = Scalar::from_bytes_reduced(s.into());
-        let k = Vec::from(k);
-        Ok((s, k))
     }
 }

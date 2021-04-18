@@ -3,23 +3,42 @@ use p256::{PublicKey, AffinePoint, Scalar};
 #[derive(Clone)]
 pub enum Protocol {
     KeygenCommitment(KeygenCommitment),
+    SchnorrSerial(SchnorrSerial),
 }
 
 #[derive(Clone)]
 pub enum KeygenCommitment {
-    Initialize(usize), // group_size
-    Reveal(Vec<Vec<u8>>), // commitments
-    Finalize(Vec<PublicKey>), // public_keys
+    Initialize(usize),
+    Reveal(Vec<Vec<u8>>),
+    Finalize(Vec<PublicKey>),
+}
+
+#[derive(Clone)]
+pub enum SchnorrSerial {
+    GetNonce(u16),
+    CacheNonce(u16),
+    RevealNonce(u16),
+    Sign(u16, AffinePoint, [u8; 32]),
+    SignReveal(u16, AffinePoint, [u8; 32]),
 }
 
 pub enum ProtocolData {
-    KeygenCommitment(KeygenCommitmentData)
+    KeygenCommitment(KeygenCommitmentData),
+    SchnorrSerial(SchnorrSerialData),
 }
 
 pub enum KeygenCommitmentData {
     Commitment(Vec<u8>),
     Reveal(PublicKey),
     Result(PublicKey),
+}
+
+pub enum SchnorrSerialData {
+    Nonce(PublicKey),
+    EncryptedNonce(Vec<u8>),
+    NonceKey(Vec<u8>),
+    Signature(Scalar),
+    SignatureNonceKey(Scalar, Vec<u8>),
 }
 
 impl ProtocolData {
@@ -29,7 +48,11 @@ impl ProtocolData {
                 KeygenCommitmentData::Commitment(data) => data,
                 _ => panic!(),
             }
-            _ => panic!(),
+            ProtocolData::SchnorrSerial(data) => match data {
+                SchnorrSerialData::EncryptedNonce(data) => data,
+                SchnorrSerialData::NonceKey(data) => data,
+                _ => panic!(),
+            }
         }
     }
 
@@ -39,21 +62,21 @@ impl ProtocolData {
                 KeygenCommitmentData::Reveal(data) => data,
                 KeygenCommitmentData::Result(data) => data,
                 _ => panic!(),
+            },
+            ProtocolData::SchnorrSerial(data) => match data {
+                SchnorrSerialData::Nonce(data) => data,
+                _ => panic!(),
+            }
+        }
+    }
+
+    pub fn expect_scalar(self) -> Scalar {
+        match self {
+            ProtocolData::SchnorrSerial(data) => match data {
+                SchnorrSerialData::Signature(data) => data,
+                _ => panic!(),
             }
             _ => panic!(),
         }
     }
-}
-// pub trait KeygenCommitment {
-//     fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String>;
-//     fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String>;
-//     fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String>;
-// }
-
-pub trait NonceEncryption {
-    fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String>;
-    fn cache_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String>;
-    fn reveal_nonce(&mut self, counter: u16) -> Result<Vec<u8>, String>;
-    fn sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<Scalar, String>;
-    fn sign_reveal(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Result<(Scalar, Vec<u8>), String>;
 }
