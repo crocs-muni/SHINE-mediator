@@ -4,7 +4,7 @@ use log::{info, warn};
 use std::convert::TryInto;
 use p256::{PublicKey, AffinePoint, Scalar};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
-use crate::protocol::{NonceEncryption, KeygenCommitment};
+use crate::protocol::{NonceEncryption, KeygenCommitment, Protocol, ProtocolData, KeygenCommitmentData};
 
 pub struct SmartcardClient {
     card: Card,
@@ -50,6 +50,36 @@ impl SmartcardClient {
             (u16::from_be_bytes(code.try_into().unwrap()), rest)
         }).map_err(|x| x.to_string())
     }
+
+    fn handle_keygen_commitment(&mut self, message: KeygenCommitment) -> KeygenCommitmentData {
+        match message {
+            KeygenCommitment::Initialize(group_size) => {
+                let (_, resp) = self.send_apdu(&[0xc1, 0xc0, group_size as u8, 0x00]).unwrap();
+                KeygenCommitmentData::Commitment(resp.to_vec())
+            },
+            KeygenCommitment::Reveal(commitments) => {
+                for (idx, commitment) in commitments.iter().enumerate() {
+                    let mut data = vec![0xc1, 0xc1, idx as u8, 0x00];
+                    data.push(commitment.len() as u8);
+                    data.extend_from_slice(commitment);
+                    self.send_apdu(&data).unwrap();
+                }
+                let (_, resp) = self.send_apdu(&[0xc1, 0xc2, 0x00, 0x00]).unwrap();
+                KeygenCommitmentData::Reveal(PublicKey::from_sec1_bytes(resp).unwrap())
+            },
+            KeygenCommitment::Finalize(public_keys) => {
+                for (idx, public_key) in public_keys.iter().enumerate() {
+                    let public_key = public_key.to_encoded_point(false).as_bytes().to_vec();
+                    let mut data = vec![0xc1, 0xc3, idx as u8, 0x00];
+                    data.push(public_key.len() as u8);
+                    data.extend_from_slice(&public_key);
+                    self.send_apdu(&data).unwrap();
+                }
+                let (_, resp) = self.send_apdu(&[0xc1, 0xc4, 0x00, 0x00]).unwrap();
+                KeygenCommitmentData::Result(PublicKey::from_sec1_bytes(resp).unwrap())
+            }
+        }
+    }
 }
 
 impl Client for SmartcardClient {
@@ -65,43 +95,50 @@ impl Client for SmartcardClient {
             Err(_) => Err(String::from("Received invalid identity key"))
         }
     }
-}
 
-impl KeygenCommitment for SmartcardClient {
-    fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
-        let (_, resp) = self.send_apdu(&[0xc1, 0xc0, group_size as u8, 0x00])?;
-        Ok(resp.to_vec())
-    }
-
-    fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String> {
-        for (idx, commitment) in commitments.iter().enumerate() {
-            let mut data = vec![0xc1, 0xc1, idx as u8, 0x00];
-            data.push(commitment.len() as u8);
-            data.extend_from_slice(commitment);
-            self.send_apdu(&data)?;
-        }
-        let (_, resp) = self.send_apdu(&[0xc1, 0xc2, 0x00, 0x00])?;
-        match PublicKey::from_sec1_bytes(resp) {
-            Ok(public_key) => Ok(public_key),
-            Err(_) => Err(String::from("Received invalid public key"))
-        }
-    }
-
-    fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String> {
-        for (idx, public_key) in public_keys.iter().enumerate() {
-            let public_key = public_key.to_encoded_point(false).as_bytes().to_vec();
-            let mut data = vec![0xc1, 0xc3, idx as u8, 0x00];
-            data.push(public_key.len() as u8);
-            data.extend_from_slice(&public_key);
-            self.send_apdu(&data)?;
-        }
-        let (_, resp) = self.send_apdu(&[0xc1, 0xc4, 0x00, 0x00])?;
-        match PublicKey::from_sec1_bytes(resp) {
-            Ok(public_key) => Ok(public_key),
-            Err(_) => Err(String::from("Received invalid group key"))
+    fn process(&mut self, msg: Protocol) -> ProtocolData {
+        match msg {
+            Protocol::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
+            _ => ProtocolData::KeygenCommitment(KeygenCommitmentData::Commitment(Vec::new())),
         }
     }
 }
+
+// impl KeygenCommitment for SmartcardClient {
+//     fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
+//         let (_, resp) = self.send_apdu(&[0xc1, 0xc0, group_size as u8, 0x00])?;
+//         Ok(resp.to_vec())
+//     }
+
+    // fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String> {
+    //     for (idx, commitment) in commitments.iter().enumerate() {
+    //         let mut data = vec![0xc1, 0xc1, idx as u8, 0x00];
+    //         data.push(commitment.len() as u8);
+    //         data.extend_from_slice(commitment);
+    //         self.send_apdu(&data)?;
+    //     }
+    //     let (_, resp) = self.send_apdu(&[0xc1, 0xc2, 0x00, 0x00])?;
+    //     match PublicKey::from_sec1_bytes(resp) {
+    //         Ok(public_key) => Ok(public_key),
+    //         Err(_) => Err(String::from("Received invalid public key"))
+    //     }
+    // }
+
+//     fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String> {
+//         for (idx, public_key) in public_keys.iter().enumerate() {
+//             let public_key = public_key.to_encoded_point(false).as_bytes().to_vec();
+//             let mut data = vec![0xc1, 0xc3, idx as u8, 0x00];
+//             data.push(public_key.len() as u8);
+//             data.extend_from_slice(&public_key);
+//             self.send_apdu(&data)?;
+//         }
+//         let (_, resp) = self.send_apdu(&[0xc1, 0xc4, 0x00, 0x00])?;
+//         match PublicKey::from_sec1_bytes(resp) {
+//             Ok(public_key) => Ok(public_key),
+//             Err(_) => Err(String::from("Received invalid group key"))
+//         }
+//     }
+// }
 
 impl NonceEncryption for SmartcardClient {
     fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {

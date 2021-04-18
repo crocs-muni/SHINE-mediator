@@ -10,6 +10,7 @@ use log::{info, error};
 use pcsc::{Context, Scope, ShareMode, Protocols};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::{PublicKey, ProjectivePoint, Scalar};
+use crate::protocol::{KeygenCommitment, Protocol};
 
 fn main() -> Result<(), String> {
     env_logger::init();
@@ -66,9 +67,12 @@ fn main() -> Result<(), String> {
         println!("{}", hex::encode(client.get_identity_key().unwrap().to_encoded_point(false).as_bytes()));
     }
 
-    let commitments: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_initialize(parties).unwrap()).collect();
-    let public_keys: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_reveal(commitments.clone()).unwrap()).collect();
-    let group_keys: Vec<_> = state.clients.iter_mut().map(|x| x.keygen_finalize(public_keys.clone()).unwrap()).collect();
+    let msg = Protocol::KeygenCommitment(KeygenCommitment::Initialize(parties));
+    let commitments: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_bytes()).collect();
+    let msg = Protocol::KeygenCommitment(KeygenCommitment::Reveal(commitments));
+    let public_keys: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_public_key()).collect();
+    let msg = Protocol::KeygenCommitment(KeygenCommitment::Finalize(public_keys));
+    let group_keys: Vec<_> = state.clients.iter_mut().map(|x| x.process(msg.clone()).expect_public_key()).collect();
     let mut group_keys = group_keys.into_iter();
     let group_key = group_keys.next().unwrap();
     for other_group_key in group_keys {

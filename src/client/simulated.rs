@@ -5,7 +5,7 @@ use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
-use crate::protocol::{NonceEncryption, KeygenCommitment};
+use crate::protocol::{NonceEncryption, KeygenCommitment, Protocol, ProtocolData, KeygenCommitmentData};
 
 pub struct SimulatedClient {
     rng: OsRng,
@@ -53,6 +53,40 @@ impl SimulatedClient {
         result.extend(hasher.finalize());
         result
     }
+
+    fn handle_keygen_commitment(&mut self, message: KeygenCommitment) -> KeygenCommitmentData {
+        match message {
+            KeygenCommitment::Initialize(group_size) => {
+                self.group_size = group_size;
+                self.group_secret = Some(SecretKey::random(self.rng));
+                let group_public = self.group_secret.as_ref().unwrap().public_key();
+                KeygenCommitmentData::Commitment(hash_point(&group_public))
+            },
+            KeygenCommitment::Reveal(commitments) => {
+                assert_eq!(self.group_size, commitments.len());
+                self.group_commitments = commitments;
+                KeygenCommitmentData::Reveal(self.group_secret.as_ref().unwrap().public_key())
+            },
+            KeygenCommitment::Finalize(public_keys) => {
+                assert_eq!(self.group_size, public_keys.len());
+                for i in 0..self.group_size {
+                    let hash = hash_point(&public_keys.get(i).unwrap());
+                    let commitment = self.group_commitments.get(i).unwrap();
+                    assert_eq!(hash.len(), commitment.len());
+                    for (l, r) in hash.iter().zip(commitment) {
+                        assert_eq!(l, r);
+                    }
+                }
+                self.group_key = Some(PublicKey::from_affine(
+                    public_keys.iter()
+                        .map(PublicKey::to_projective)
+                        .fold(ProjectivePoint::identity(), |acc, x| acc + x)
+                        .to_affine()
+                ).unwrap());
+                KeygenCommitmentData::Result(self.group_key.unwrap())
+            }
+        }
+    }
 }
 
 impl Client for SimulatedClient {
@@ -64,41 +98,47 @@ impl Client for SimulatedClient {
         Ok(self.identity_secret.public_key())
     }
 
-}
-
-impl KeygenCommitment for SimulatedClient {
-    fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
-        self.group_size = group_size;
-        self.group_secret = Some(SecretKey::random(self.rng));
-        let group_public = self.group_secret.as_ref().unwrap().public_key();
-        Ok(hash_point(&group_public))
-    }
-
-    fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String> {
-        assert_eq!(self.group_size, commitments.len());
-        self.group_commitments = commitments;
-        Ok(self.group_secret.as_ref().unwrap().public_key())
-    }
-
-    fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String> {
-        assert_eq!(self.group_size, public_keys.len());
-        for i in 0..self.group_size {
-            let hash = hash_point(&public_keys.get(i).unwrap());
-            let commitment = self.group_commitments.get(i).unwrap();
-            assert_eq!(hash.len(), commitment.len());
-            for (l, r) in hash.iter().zip(commitment) {
-                assert_eq!(l, r);
-            }
+    fn process(&mut self, msg: Protocol) -> ProtocolData {
+        match msg {
+            Protocol::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
+            _ => ProtocolData::KeygenCommitment(KeygenCommitmentData::Commitment(Vec::new())),
         }
-        self.group_key = Some(PublicKey::from_affine(
-            public_keys.iter()
-                .map(PublicKey::to_projective)
-                .fold(ProjectivePoint::identity(), |acc, x| acc + x)
-                .to_affine()
-        ).unwrap());
-        Ok(self.group_key.unwrap())
     }
 }
+
+// impl KeygenCommitment for SimulatedClient {
+//     fn keygen_initialize(&mut self, group_size: usize) -> Result<Vec<u8>, String> {
+//         self.group_size = group_size;
+//         self.group_secret = Some(SecretKey::random(self.rng));
+//         let group_public = self.group_secret.as_ref().unwrap().public_key();
+//         Ok(hash_point(&group_public))
+//     }
+//
+//     fn keygen_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Result<PublicKey, String> {
+//         assert_eq!(self.group_size, commitments.len());
+//         self.group_commitments = commitments;
+//         Ok(self.group_secret.as_ref().unwrap().public_key())
+//     }
+//
+//     fn keygen_finalize(&mut self, public_keys: Vec<PublicKey>) -> Result<PublicKey, String> {
+//         assert_eq!(self.group_size, public_keys.len());
+//         for i in 0..self.group_size {
+//             let hash = hash_point(&public_keys.get(i).unwrap());
+//             let commitment = self.group_commitments.get(i).unwrap();
+//             assert_eq!(hash.len(), commitment.len());
+//             for (l, r) in hash.iter().zip(commitment) {
+//                 assert_eq!(l, r);
+//             }
+//         }
+//         self.group_key = Some(PublicKey::from_affine(
+//             public_keys.iter()
+//                 .map(PublicKey::to_projective)
+//                 .fold(ProjectivePoint::identity(), |acc, x| acc + x)
+//                 .to_affine()
+//         ).unwrap());
+//         Ok(self.group_key.unwrap())
+//     }
+// }
 
 impl NonceEncryption for SimulatedClient {
     fn get_nonce(&mut self, counter: u16) -> Result<PublicKey, String> {
