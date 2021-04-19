@@ -1,5 +1,11 @@
 use p256::{PublicKey, Scalar};
 
+pub enum Protocol {
+    KeygenCommitment,
+    SchnorrSerial,
+    SchnorrCommitment,
+}
+
 #[derive(Clone)]
 pub enum ProtocolMessage {
     KeygenCommitment(KeygenCommitment),

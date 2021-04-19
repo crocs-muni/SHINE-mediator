@@ -5,7 +5,7 @@ use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
-use crate::protocol::{KeygenCommitment, ProtocolMessage, ProtocolData, KeygenCommitmentData, SchnorrSerial, SchnorrSerialData, SchnorrCommitmentData, SchnorrCommitment};
+use crate::protocol::{KeygenCommitment, ProtocolMessage, ProtocolData, KeygenCommitmentData, SchnorrSerial, SchnorrSerialData, SchnorrCommitmentData, SchnorrCommitment, Protocol};
 
 pub struct SimulatedClient {
     rng: OsRng,
@@ -190,6 +190,14 @@ impl Client for SimulatedClient {
             ProtocolMessage::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
             ProtocolMessage::SchnorrSerial(msg) => ProtocolData::SchnorrSerial(self.handle_schnorr_serial(msg)),
             ProtocolMessage::SchnorrCommitment(msg) => ProtocolData::SchnorrCommitment(self.handle_schnorr_commitment(msg)),
+        }
+    }
+
+    fn is_supported(&self, protocol: Protocol) -> bool {
+        match protocol {
+            Protocol::KeygenCommitment => true,
+            Protocol::SchnorrSerial => true,
+            Protocol::SchnorrCommitment => true,
         }
     }
 }

@@ -4,7 +4,7 @@ use log::{info, warn};
 use std::convert::TryInto;
 use p256::{PublicKey, Scalar};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
-use crate::protocol::{KeygenCommitment, ProtocolMessage, ProtocolData, KeygenCommitmentData, SchnorrSerialData, SchnorrSerial};
+use crate::protocol::{KeygenCommitment, ProtocolMessage, ProtocolData, KeygenCommitmentData, SchnorrSerialData, SchnorrSerial, Protocol};
 
 pub struct SmartcardClient {
     card: Card,
@@ -148,6 +148,14 @@ impl Client for SmartcardClient {
             ProtocolMessage::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
             ProtocolMessage::SchnorrSerial(msg) => ProtocolData::SchnorrSerial(self.handle_schnorr_serial(msg)),
             _ => panic!()
+        }
+    }
+
+    fn is_supported(&self, protocol: Protocol) -> bool {
+        match protocol {
+            Protocol::KeygenCommitment => true,
+            Protocol::SchnorrSerial => true,
+            Protocol::SchnorrCommitment => false,
         }
     }
 }
