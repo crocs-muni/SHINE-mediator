@@ -147,6 +147,7 @@ impl Client for SmartcardClient {
         match msg {
             Protocol::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
             Protocol::SchnorrSerial(msg) => ProtocolData::SchnorrSerial(self.handle_schnorr_serial(msg)),
+            _ => panic!()
         }
     }
 }

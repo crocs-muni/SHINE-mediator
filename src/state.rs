@@ -1,6 +1,9 @@
 use crate::client::Client;
-use crate::protocol::{Protocol, ProtocolData, KeygenCommitment, SchnorrSerial, SchnorrSerialData};
+use crate::protocol::{Protocol, ProtocolData, KeygenCommitment, SchnorrSerial, SchnorrSerialData, SchnorrCommitment, SchnorrCommitmentData};
 use p256::{PublicKey, Scalar, ProjectivePoint};
+use crate::client;
+use std::ops::{Mul, Sub};
+use crate::client::simulated::fold_points;
 
 pub struct State {
     pub clients: Vec<Box<dyn Client>>
@@ -48,11 +51,7 @@ impl State {
             .into_iter()
             .map(ProtocolData::expect_public_key)
             .collect();
-        let aggregate_nonce = PublicKey::from_affine(nonce_points.iter()
-            .map(PublicKey::to_projective)
-            .fold(ProjectivePoint::identity(), |acc, x| acc + x)
-            .to_affine()
-        ).unwrap();
+        let aggregate_nonce = fold_points(&nonce_points);
         let msg = Protocol::SchnorrSerial(SchnorrSerial::Sign(counter, aggregate_nonce.clone(), message));
         let signatures: Vec<_> = self.broadcast(msg)
             .into_iter()
@@ -103,6 +102,38 @@ impl State {
         ((nonce, signature), decryption_keys)
     }
 
+    pub fn schnorr_commitment_commit(&mut self, message: [u8; 32]) -> Vec<Vec<u8>> {
+        let msg = Protocol::SchnorrCommitment(SchnorrCommitment::CommitNonce(message));
+        self.broadcast(msg)
+            .into_iter()
+            .map(ProtocolData::expect_bytes)
+            .collect()
+    }
+
+    pub fn schnorr_commitment_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Vec<PublicKey> {
+        let msg = Protocol::SchnorrCommitment(SchnorrCommitment::RevealNonce(commitments));
+        self.broadcast(msg)
+            .into_iter()
+            .map(ProtocolData::expect_public_key)
+            .collect()
+    }
+
+    pub fn schnorr_commitment_sign(&mut self, nonce_points: Vec<PublicKey>) -> (PublicKey, Scalar) {
+        let aggregate_nonce = fold_points(&nonce_points);
+        let mut signature = Scalar::zero();
+
+        let msg = Protocol::SchnorrCommitment(SchnorrCommitment::Sign(nonce_points));
+        for data in self.broadcast(msg) {
+            if let ProtocolData::SchnorrCommitment(SchnorrCommitmentData::Signature(nonce_point, s)) = data {
+                signature = signature.add(&s);
+                assert_eq!(nonce_point, aggregate_nonce);
+            } else {
+                panic!();
+            }
+        }
+        (aggregate_nonce, signature)
+    }
+
     pub fn decrypt_nonces(encrypted_nonces: Vec<Vec<u8>>, decryption_keys: Vec<Vec<u8>>) -> Vec<PublicKey> {
         let mut decrypted_nonces = Vec::new();
         for (encrypted_nonce, decryption_key) in encrypted_nonces.iter().zip(decryption_keys.iter()) {
@@ -117,4 +148,14 @@ impl State {
         }
         decrypted_nonces
     }
+
+    pub fn schnorr_verify(signature: (PublicKey, Scalar), message: [u8; 32], public_key: &PublicKey) -> bool {
+        let (nonce, signature) = signature;
+
+        let challenge = client::simulated::compute_challenge(public_key, &nonce, message);
+        let verif_point = ProjectivePoint::generator().mul(signature).sub(public_key.to_projective().mul(challenge)).to_affine();
+
+        &verif_point == nonce.as_affine()
+    }
+
 }

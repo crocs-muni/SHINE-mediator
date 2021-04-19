@@ -5,7 +5,6 @@ mod protocol;
 use client::SimulatedClient;
 use state::State;
 
-use std::ops::{Mul, Sub};
 use log::info;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::{PublicKey, ProjectivePoint};
@@ -81,12 +80,9 @@ fn main() -> Result<(), String> {
     let group_key = state.keygen_commitment(parties);
 
     let message = [0; 32];
-    let (nonce, signature) = state.schnorr_serial_sign(0, message);
+    let signature = state.schnorr_serial_sign(0, message);
 
-    let challenge = client::simulated::compute_challenge(group_key, nonce.clone(), message);
-
-    let verif_point = ProjectivePoint::generator().mul(signature).sub(group_key.to_projective().mul(challenge)).to_affine();
-    assert_eq!(&verif_point, nonce.as_affine());
+    assert!(State::schnorr_verify(signature, message, &group_key));
 
     let cached_nonces = state.schnorr_serial_cache(5);
     let decryption_keys = state.schnorr_serial_reveal(5);
@@ -111,6 +107,11 @@ fn main() -> Result<(), String> {
     for (plain, decrypted) in state.schnorr_serial_nonce(6).into_iter().zip(decrypted_nonces) {
         assert_eq!(plain, decrypted);
     }
+
+    let commitments = state.schnorr_commitment_commit(message);
+    let reveals = state.schnorr_commitment_reveal(commitments);
+    let signature = state.schnorr_commitment_sign(reveals);
+    assert!(State::schnorr_verify(signature, message, &group_key));
 
     info!("Terminating");
     Ok(())

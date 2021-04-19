@@ -4,6 +4,7 @@ use p256::{PublicKey, Scalar};
 pub enum Protocol {
     KeygenCommitment(KeygenCommitment),
     SchnorrSerial(SchnorrSerial),
+    SchnorrCommitment(SchnorrCommitment),
 }
 
 #[derive(Clone)]
@@ -22,9 +23,17 @@ pub enum SchnorrSerial {
     SignReveal(u16, PublicKey, [u8; 32]),
 }
 
+#[derive(Clone)]
+pub enum SchnorrCommitment {
+    CommitNonce([u8; 32]),
+    RevealNonce(Vec<Vec<u8>>),
+    Sign(Vec<PublicKey>)
+}
+
 pub enum ProtocolData {
     KeygenCommitment(KeygenCommitmentData),
     SchnorrSerial(SchnorrSerialData),
+    SchnorrCommitment(SchnorrCommitmentData),
 }
 
 pub enum KeygenCommitmentData {
@@ -41,6 +50,12 @@ pub enum SchnorrSerialData {
     SignatureNonceKey(Scalar, Vec<u8>),
 }
 
+pub enum SchnorrCommitmentData {
+    Commitment(Vec<u8>),
+    Reveal(PublicKey),
+    Signature(PublicKey, Scalar)
+}
+
 impl ProtocolData {
     pub fn expect_bytes(self) -> Vec<u8> {
         match self {
@@ -51,6 +66,10 @@ impl ProtocolData {
             ProtocolData::SchnorrSerial(data) => match data {
                 SchnorrSerialData::EncryptedNonce(data) => data,
                 SchnorrSerialData::NonceKey(data) => data,
+                _ => panic!(),
+            },
+            ProtocolData::SchnorrCommitment(data) => match data {
+                SchnorrCommitmentData::Commitment(data) => data,
                 _ => panic!(),
             }
         }
@@ -65,6 +84,10 @@ impl ProtocolData {
             },
             ProtocolData::SchnorrSerial(data) => match data {
                 SchnorrSerialData::Nonce(data) => data,
+                _ => panic!(),
+            }
+            ProtocolData::SchnorrCommitment(data) => match data {
+                SchnorrCommitmentData::Reveal(data) => data,
                 _ => panic!(),
             }
         }
