@@ -1,5 +1,5 @@
 use crate::client::Client;
-use p256::{PublicKey, SecretKey, ProjectivePoint, AffinePoint, Scalar};
+use p256::{PublicKey, SecretKey, ProjectivePoint, Scalar};
 use rand::rngs::OsRng;
 use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
@@ -120,7 +120,7 @@ impl SimulatedClient {
         }
     }
 
-    fn schnorr_sign(&mut self, counter: u16, nonce_point: AffinePoint, message: [u8; 32]) -> Scalar {
+    fn schnorr_sign(&mut self, counter: u16, nonce_point: PublicKey, message: [u8; 32]) -> Scalar {
         assert!(counter >= self.cache_counter);
         let &nonce = self.prf(counter).secret_scalar();
         let challenge = compute_challenge(self.group_key.unwrap(), nonce_point, message);
@@ -159,7 +159,7 @@ fn hash_point(point: &PublicKey) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
-pub fn compute_challenge(group_key: PublicKey, nonce_point: AffinePoint, message: [u8; 32]) -> Scalar {
+pub fn compute_challenge(group_key: PublicKey, nonce_point: PublicKey, message: [u8; 32]) -> Scalar {
     let mut hasher = Sha256::new();
     hasher.update(group_key.to_encoded_point(false).as_bytes());
     hasher.update(nonce_point.to_encoded_point(false).as_bytes());

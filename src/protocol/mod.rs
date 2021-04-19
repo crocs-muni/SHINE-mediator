@@ -1,4 +1,4 @@
-use p256::{PublicKey, AffinePoint, Scalar};
+use p256::{PublicKey, Scalar};
 
 #[derive(Clone)]
 pub enum Protocol {
@@ -18,8 +18,8 @@ pub enum SchnorrSerial {
     GetNonce(u16),
     CacheNonce(u16),
     RevealNonce(u16),
-    Sign(u16, AffinePoint, [u8; 32]),
-    SignReveal(u16, AffinePoint, [u8; 32]),
+    Sign(u16, PublicKey, [u8; 32]),
+    SignReveal(u16, PublicKey, [u8; 32]),
 }
 
 pub enum ProtocolData {

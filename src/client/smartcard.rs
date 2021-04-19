@@ -2,7 +2,7 @@ use crate::client::Client;
 use pcsc::Card;
 use log::{info, warn};
 use std::convert::TryInto;
-use p256::{PublicKey, AffinePoint, Scalar};
+use p256::{PublicKey, Scalar};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use crate::protocol::{KeygenCommitment, Protocol, ProtocolData, KeygenCommitmentData, SchnorrSerialData, SchnorrSerial};
 
