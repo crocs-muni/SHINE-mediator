@@ -7,10 +7,14 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pcsc = "2"
+pcsc = { version = "2", optional = true }
 log = "0.4"
 env_logger = "0.8"
 p256 = { version = "0.8.0-pre", features = ["arithmetic"] }
 hex = "0.4.2"
 rand = "*"
 sha2 = "0.9.3"
+
+[features]
+default = ["smartcard"]
+smartcard = ["pcsc"]

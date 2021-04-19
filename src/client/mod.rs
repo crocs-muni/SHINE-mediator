@@ -1,6 +1,8 @@
+#[cfg(feature = "smartcard")]
 mod smartcard;
 pub mod simulated;
 
+#[cfg(feature = "smartcard")]
 pub use smartcard::SmartcardClient;
 pub use simulated::SimulatedClient;
 

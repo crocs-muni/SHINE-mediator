@@ -2,19 +2,19 @@ mod state;
 mod client;
 mod protocol;
 
-use client::{SimulatedClient, SmartcardClient};
+use client::SimulatedClient;
 use state::State;
 
 use std::ops::{Mul, Sub};
-use log::{info, error};
-use pcsc::{Context, Scope, ShareMode, Protocols};
+use log::info;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::{PublicKey, ProjectivePoint};
 
-fn main() -> Result<(), String> {
-    env_logger::init();
-    info!("Starting");
-    let mut state = State::new();
+#[cfg(feature = "smartcard")]
+fn connect_smartcard_clients(state: &mut State) -> Result<(), String> {
+    use client::SmartcardClient;
+    use pcsc::{Context, Scope, ShareMode, Protocols};
+    use log::error;
 
     let ctx = match Context::establish(Scope::User) {
         Ok(ctx) => ctx,
@@ -55,6 +55,18 @@ fn main() -> Result<(), String> {
             state.add_client(Box::new(client));
         }
     }
+
+    Ok(())
+}
+
+fn main() -> Result<(), String> {
+    env_logger::init();
+    info!("Starting");
+    let mut state = State::new();
+
+    #[cfg(feature = "smartcard")]
+    connect_smartcard_clients(&mut state)?;
+
     state.add_client(Box::new(SimulatedClient::new()));
     state.add_client(Box::new(SimulatedClient::new()));
     state.add_client(Box::new(SimulatedClient::new()));
