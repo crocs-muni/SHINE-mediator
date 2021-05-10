@@ -8,6 +8,7 @@ use state::State;
 use log::info;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::{PublicKey, ProjectivePoint};
+use crate::state::{schnorr_verify, decrypt_nonces};
 
 #[cfg(feature = "smartcard")]
 fn connect_smartcard_clients(state: &mut State) -> Result<(), String> {
@@ -82,11 +83,11 @@ fn main() -> Result<(), String> {
     let message = [0; 32];
     let signature = state.schnorr_serial_sign(0, message);
 
-    assert!(State::schnorr_verify(signature, message, &group_key));
+    assert!(schnorr_verify(signature, message, &group_key));
 
     let cached_nonces = state.schnorr_serial_cache(5);
     let decryption_keys = state.schnorr_serial_reveal(5);
-    let decrypted_nonces = State::decrypt_nonces(cached_nonces, decryption_keys);
+    let decrypted_nonces = decrypt_nonces(cached_nonces, decryption_keys);
 
     let nonce_points = decrypted_nonces.clone();
 
@@ -102,7 +103,7 @@ fn main() -> Result<(), String> {
 
     let cached_nonces = state.schnorr_serial_cache(6);
     let (_, decryption_keys) = state.schnorr_serial_sign_reveal(5, aggregate_nonce, message);
-    let decrypted_nonces = State::decrypt_nonces(cached_nonces, decryption_keys);
+    let decrypted_nonces = decrypt_nonces(cached_nonces, decryption_keys);
 
     for (plain, decrypted) in state.schnorr_serial_nonce(6).into_iter().zip(decrypted_nonces) {
         assert_eq!(plain, decrypted);
@@ -111,7 +112,10 @@ fn main() -> Result<(), String> {
     let commitments = state.schnorr_commitment_commit(message);
     let reveals = state.schnorr_commitment_reveal(commitments);
     let signature = state.schnorr_commitment_sign(reveals);
-    assert!(State::schnorr_verify(signature, message, &group_key));
+    assert!(schnorr_verify(signature, message, &group_key));
+
+    let signature = state.interop_commit_sign(10, message);
+    assert!(schnorr_verify(signature, message, &group_key));
 
     info!("Terminating");
     Ok(())

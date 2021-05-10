@@ -202,7 +202,7 @@ impl Client for SimulatedClient {
     }
 }
 
-fn hash_point(point: &PublicKey) -> Vec<u8> {
+pub fn hash_point(point: &PublicKey) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(point.to_encoded_point(false).to_bytes());
     hasher.finalize().to_vec()
