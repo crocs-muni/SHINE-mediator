@@ -1,10 +1,11 @@
 use crate::client::Client;
-use crate::client::simulated::hash_point;
-use crate::protocol::{ProtocolMessage, ProtocolData, KeygenCommitment, SchnorrSerial, SchnorrSerialData, SchnorrCommitment, SchnorrCommitmentData, Protocol};
-use p256::{PublicKey, Scalar, ProjectivePoint};
+use crate::client::simulated::{hash_point, compute_delin, combine_prenonces};
+use crate::protocol::{ProtocolMessage, ProtocolData, KeygenCommitment, SchnorrSerial, SchnorrSerialData, SchnorrCommitment, SchnorrCommitmentData, Protocol, SchnorrDelin, SchnorrDelinData};
+use p256::{PublicKey, Scalar, ProjectivePoint, SecretKey};
 use crate::client;
 use std::ops::{Mul, Sub};
 use crate::client::simulated::fold_points;
+use rand::rngs::OsRng;
 
 pub struct State {
     pub clients: Vec<Box<dyn Client>>
@@ -133,6 +134,37 @@ impl State {
             }
         }
         (aggregate_nonce, signature)
+    }
+
+    pub fn schnorr_delin_prenonces(&mut self) -> Vec<(PublicKey, PublicKey)> {
+        let msg = ProtocolMessage::SchnorrDelin(SchnorrDelin::GetPrenonces);
+        self.broadcast(msg)
+            .into_iter()
+            .map(|x| match x {
+                ProtocolData::SchnorrDelin(SchnorrDelinData::Prenonces(prenonces)) => prenonces,
+                _ => panic!(),
+            })
+            .collect()
+    }
+
+    pub fn schnorr_delin_sign(&mut self, prenonces: Vec<(PublicKey, PublicKey)>, message: [u8; 32]) -> (PublicKey, Scalar) {
+        let mut aggregate_nonce = None;
+        let mut signature = Scalar::zero();
+
+        let msg = ProtocolMessage::SchnorrDelin(SchnorrDelin::Sign(prenonces, message));
+        for data in self.broadcast(msg) {
+            if let ProtocolData::SchnorrDelin(SchnorrDelinData::Signature(nonce_point, s)) = data {
+                if aggregate_nonce.is_none() {
+                    aggregate_nonce = Some(nonce_point);
+                }
+                signature = signature.add(&s);
+                assert_eq!(nonce_point, aggregate_nonce.unwrap());
+            } else {
+                panic!();
+            }
+        }
+        (aggregate_nonce.unwrap(), signature)
+
     }
 
     pub fn interop_commit_sign(&mut self, counter: u16, message: [u8; 32]) -> (PublicKey, Scalar) {

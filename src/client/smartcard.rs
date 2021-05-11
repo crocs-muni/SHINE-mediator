@@ -156,6 +156,7 @@ impl Client for SmartcardClient {
             Protocol::KeygenCommitment => true,
             Protocol::SchnorrSerial => true,
             Protocol::SchnorrCommitment => false,
+            Protocol::SchnorrDelin => false,
         }
     }
 }

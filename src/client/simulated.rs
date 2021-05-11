@@ -5,7 +5,8 @@ use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
-use crate::protocol::{KeygenCommitment, ProtocolMessage, ProtocolData, KeygenCommitmentData, SchnorrSerial, SchnorrSerialData, SchnorrCommitmentData, SchnorrCommitment, Protocol};
+use crate::protocol::{KeygenCommitment, ProtocolMessage, ProtocolData, KeygenCommitmentData, SchnorrSerial, SchnorrSerialData, SchnorrCommitmentData, SchnorrCommitment, Protocol, SchnorrDelin, SchnorrDelinData};
+use std::ops::Mul;
 
 pub struct SimulatedClient {
     rng: OsRng,
@@ -21,6 +22,8 @@ pub struct SimulatedClient {
     commitment_message: [u8; 32],
     commitment_secret: Option<SecretKey>,
     commitment_hashes: Vec<Vec<u8>>,
+
+    delin_prenonces: Option<(SecretKey, SecretKey)>,
 }
 
 impl SimulatedClient {
@@ -41,6 +44,7 @@ impl SimulatedClient {
             commitment_message: [0; 32],
             commitment_secret: None,
             commitment_hashes: Vec::new(),
+            delin_prenonces: None,
         }
     }
 
@@ -160,6 +164,28 @@ impl SimulatedClient {
         }
     }
 
+    fn handle_schnorr_delin(&mut self, message: SchnorrDelin) -> SchnorrDelinData {
+        match message {
+            SchnorrDelin::GetPrenonces => {
+                self.delin_prenonces = Some((SecretKey::random(self.rng), SecretKey::random(self.rng)));
+                SchnorrDelinData::Prenonces((
+                    self.delin_prenonces.as_ref().unwrap().0.public_key(),
+                    self.delin_prenonces.as_ref().unwrap().1.public_key()
+                ))
+            },
+            SchnorrDelin::Sign(prenonces, message) => {
+                let prenonces = combine_prenonces(&prenonces);
+                let (coeff, nonce_point) = compute_delin(&prenonces, message);
+                let nonce = &self.delin_prenonces.as_ref().unwrap().0.secret_scalar() as &Scalar;
+                let nonce = nonce + &coeff.mul(&self.delin_prenonces.as_ref().unwrap().1.secret_scalar() as &Scalar);
+                let challenge = compute_challenge(&self.group_key.unwrap(), &nonce_point, message);
+                let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
+                let signature = nonce.add(&product);
+                SchnorrDelinData::Signature(nonce_point, Scalar::from_bytes_reduced(&signature.to_bytes()))
+            }
+        }
+    }
+
     fn schnorr_sign(&mut self, counter: u16, nonce_point: PublicKey, message: [u8; 32]) -> Scalar {
         assert!(counter >= self.cache_counter);
         let &nonce = self.prf(counter).secret_scalar();
@@ -190,6 +216,7 @@ impl Client for SimulatedClient {
             ProtocolMessage::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
             ProtocolMessage::SchnorrSerial(msg) => ProtocolData::SchnorrSerial(self.handle_schnorr_serial(msg)),
             ProtocolMessage::SchnorrCommitment(msg) => ProtocolData::SchnorrCommitment(self.handle_schnorr_commitment(msg)),
+            ProtocolMessage::SchnorrDelin(msg) => ProtocolData::SchnorrDelin(self.handle_schnorr_delin(msg)),
         }
     }
 
@@ -198,6 +225,7 @@ impl Client for SimulatedClient {
             Protocol::KeygenCommitment => true,
             Protocol::SchnorrSerial => true,
             Protocol::SchnorrCommitment => true,
+            Protocol::SchnorrDelin => true,
         }
     }
 }
@@ -214,6 +242,26 @@ pub fn compute_challenge(group_key: &PublicKey, nonce_point: &PublicKey, message
     hasher.update(nonce_point.to_encoded_point(false).as_bytes());
     hasher.update(message);
     Scalar::from_bytes_reduced(&hasher.finalize())
+}
+
+pub fn combine_prenonces(prenonces: &Vec<(PublicKey, PublicKey)>) -> (PublicKey, PublicKey) {
+    let prenonces: (Vec<_>, Vec<_>) = (
+        prenonces.iter().map(|x| x.0).collect(),
+        prenonces.iter().map(|x| x.1).collect()
+    );
+    (fold_points(&prenonces.0), fold_points(&prenonces.1))
+}
+
+pub fn compute_delin(prenonces: &(PublicKey, PublicKey), message: [u8; 32]) -> (Scalar, PublicKey) {
+    let mut hasher = Sha256::new();
+    hasher.update(prenonces.0.to_encoded_point(false).as_bytes());
+    hasher.update(prenonces.1.to_encoded_point(false).as_bytes());
+    hasher.update(message);
+    let coeff = Scalar::from_bytes_reduced(&hasher.finalize());
+    let nonce_point = PublicKey::from_affine(
+        (prenonces.0.to_projective() + prenonces.1.to_projective().mul(coeff)).to_affine()
+    ).unwrap();
+    (coeff, nonce_point)
 }
 
 pub fn fold_points(points: &[PublicKey]) -> PublicKey {
