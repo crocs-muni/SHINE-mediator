@@ -121,6 +121,9 @@ fn main() -> Result<(), String> {
     let signature = state.schnorr_delin_sign(prenonces, message);
     assert!(schnorr_verify(signature, message, &group_key));
 
+    let signature = state.interop_delin_sign(20, message);
+    assert!(schnorr_verify(signature, message, &group_key));
+
     info!("Terminating");
     Ok(())
 }

@@ -214,6 +214,62 @@ impl State {
 
         (nonce, signature)
     }
+
+    pub fn interop_delin_sign(&mut self, counter: u16, message: [u8; 32]) -> (PublicKey, Scalar) {
+        let mut serial_clients = Vec::new();
+        let mut delin_clients = Vec::new();
+        for (idx, client) in self.clients.iter().enumerate() {
+            if client.is_supported(Protocol::SchnorrSerial) {
+                serial_clients.push(idx);
+            } else if client.is_supported(Protocol::SchnorrDelin) {
+                delin_clients.push(idx);
+            } else {
+                panic!();
+            }
+        }
+
+        let mut nonces = Vec::new();
+        for idx in &serial_clients {
+            let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::GetNonce(counter));
+            nonces.push(self.clients[*idx].process(msg).expect_public_key());
+        }
+        let rng = OsRng::default();
+        let simulated_nonces: Vec<_> = (0..nonces.len()).map(|_| SecretKey::random(rng)).collect();
+        let mut prenonces: Vec<(PublicKey, PublicKey)> = nonces.into_iter()
+            .zip(simulated_nonces.clone())
+            .map(|(x,y): (PublicKey, SecretKey)| {
+                return (x, y.public_key())
+            })
+            .collect();
+
+
+        for idx in &delin_clients {
+            let msg = ProtocolMessage::SchnorrDelin(SchnorrDelin::GetPrenonces);
+            if let ProtocolData::SchnorrDelin(SchnorrDelinData::Prenonces(data)) = self.clients[*idx].process(msg) {
+                prenonces.push(data);
+            } else {
+                panic!();
+            }
+        }
+
+        let (coeff, nonce) = compute_delin(&combine_prenonces(&prenonces), message);
+
+        let mut signatures = Vec::new();
+        for idx in &serial_clients {
+            let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::Sign(counter, nonce.clone(), message));
+            signatures.push(self.clients[*idx].process(msg).expect_scalar());
+        }
+        for idx in &delin_clients {
+            let msg = ProtocolMessage::SchnorrDelin(SchnorrDelin::Sign(prenonces.clone(), message));
+            signatures.push(self.clients[*idx].process(msg).expect_scalar());
+        }
+
+        let mut signature = signatures.iter().fold(Scalar::zero(), |acc, x| acc + x);
+        for simulated_nonce in simulated_nonces {
+            signature += coeff.mul(simulated_nonce.secret_scalar() as &Scalar)
+        }
+        (nonce, signature)
+    }
 }
 
 pub fn decrypt_nonces(encrypted_nonces: Vec<Vec<u8>>, decryption_keys: Vec<Vec<u8>>) -> Vec<PublicKey> {
