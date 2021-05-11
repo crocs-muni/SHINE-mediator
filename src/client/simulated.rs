@@ -151,7 +151,7 @@ impl SimulatedClient {
 
                 let nonce_point = fold_points(&nonces);
                 let &nonce = self.commitment_secret.as_ref().unwrap().secret_scalar();
-                let challenge = compute_challenge(&self.group_key.unwrap(), &nonce_point, self.commitment_message);
+                let challenge = compute_challenge(&nonce_point, &self.group_key.unwrap(), self.commitment_message);
                 let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
                 let signature = nonce.add(&product);
 
@@ -178,7 +178,7 @@ impl SimulatedClient {
                 let (coeff, nonce_point) = compute_delin(&prenonces, message);
                 let nonce = &self.delin_prenonces.as_ref().unwrap().0.secret_scalar() as &Scalar;
                 let nonce = nonce + &coeff.mul(&self.delin_prenonces.as_ref().unwrap().1.secret_scalar() as &Scalar);
-                let challenge = compute_challenge(&self.group_key.unwrap(), &nonce_point, message);
+                let challenge = compute_challenge(&nonce_point, &self.group_key.unwrap(), message);
                 let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
                 let signature = nonce.add(&product);
                 SchnorrDelinData::Signature(nonce_point, Scalar::from_bytes_reduced(&signature.to_bytes()))
@@ -189,7 +189,7 @@ impl SimulatedClient {
     fn schnorr_sign(&mut self, counter: u16, nonce_point: PublicKey, message: [u8; 32]) -> Scalar {
         assert!(counter >= self.cache_counter);
         let &nonce = self.prf(counter).secret_scalar();
-        let challenge = compute_challenge(&self.group_key.unwrap(), &nonce_point, message);
+        let challenge = compute_challenge(&nonce_point, &self.group_key.unwrap(), message);
         let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
         let signature = nonce.add(&product);
         Scalar::from_bytes_reduced(&signature.to_bytes())
@@ -236,10 +236,10 @@ pub fn hash_point(point: &PublicKey) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
-pub fn compute_challenge(group_key: &PublicKey, nonce_point: &PublicKey, message: [u8; 32]) -> Scalar {
+pub fn compute_challenge(nonce_point: &PublicKey, group_key: &PublicKey, message: [u8; 32]) -> Scalar {
     let mut hasher = Sha256::new();
-    hasher.update(group_key.to_encoded_point(false).as_bytes());
     hasher.update(nonce_point.to_encoded_point(false).as_bytes());
+    hasher.update(group_key.to_encoded_point(false).as_bytes());
     hasher.update(message);
     Scalar::from_bytes_reduced(&hasher.finalize())
 }

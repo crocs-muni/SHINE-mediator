@@ -294,7 +294,7 @@ pub fn decrypt_nonces(encrypted_nonces: Vec<Vec<u8>>, decryption_keys: Vec<Vec<u
 pub fn schnorr_verify(signature: (PublicKey, Scalar), message: [u8; 32], public_key: &PublicKey) -> bool {
     let (nonce, signature) = signature;
 
-    let challenge = client::simulated::compute_challenge(public_key, &nonce, message);
+    let challenge = client::simulated::compute_challenge(&nonce, public_key, message);
     let verif_point = ProjectivePoint::generator().mul(signature).sub(public_key.to_projective().mul(challenge)).to_affine();
 
     &verif_point == nonce.as_affine()
