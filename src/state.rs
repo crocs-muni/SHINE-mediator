@@ -1,6 +1,6 @@
 use crate::client::Client;
 use crate::client::simulated::{hash_point, compute_delin, combine_prenonces};
-use crate::protocol::{ProtocolMessage, ProtocolData, KeygenCommitment, SchnorrSerial, SchnorrSerialData, SchnorrCommitment, SchnorrCommitmentData, Protocol, SchnorrDelin, SchnorrDelinData};
+use crate::protocol::{ProtocolMessage, ProtocolData, KeygenCommit, SchnorrExchange, SchnorrExchangeData, SchnorrCommit, SchnorrCommitData, Protocol, SchnorrDelin, SchnorrDelinData};
 use p256::{PublicKey, Scalar, ProjectivePoint, SecretKey};
 use crate::client;
 use std::ops::{Mul, Sub};
@@ -24,18 +24,22 @@ impl State {
         self.clients.iter_mut().map(|x| x.process(message.clone())).collect()
     }
 
+    pub fn all_support(&mut self, protocol: Protocol) -> bool {
+        self.clients.iter_mut().all(|x| x.is_supported(protocol))
+    }
+
     pub fn keygen_commitment(&mut self, parties: usize) -> PublicKey {
-        let msg = ProtocolMessage::KeygenCommitment(KeygenCommitment::Initialize(parties));
+        let msg = ProtocolMessage::KeygenCommit(KeygenCommit::Initialize(parties));
         let commitments = self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_bytes)
             .collect();
-        let msg = ProtocolMessage::KeygenCommitment(KeygenCommitment::Reveal(commitments));
+        let msg = ProtocolMessage::KeygenCommit(KeygenCommit::Reveal(commitments));
         let public_keys: Vec<_> = self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_public_key)
             .collect();
-        let msg = ProtocolMessage::KeygenCommitment(KeygenCommitment::Finalize(public_keys));
+        let msg = ProtocolMessage::KeygenCommit(KeygenCommit::Finalize(public_keys));
         let mut group_keys = self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_public_key)
@@ -47,14 +51,14 @@ impl State {
         group_key
     }
 
-    pub fn schnorr_serial_sign(&mut self, counter: u16, message: [u8; 32]) -> (PublicKey, Scalar) {
-        let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::GetNonce(counter));
+    pub fn schnorr_exchange_sign(&mut self, counter: u16, message: [u8; 32]) -> (PublicKey, Scalar) {
+        let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::GetNonce(counter));
         let nonce_points: Vec<_> = self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_public_key)
             .collect();
         let aggregate_nonce = fold_points(&nonce_points);
-        let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::Sign(counter, aggregate_nonce.clone(), message));
+        let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::Sign(counter, aggregate_nonce.clone(), message));
         let signatures: Vec<_> = self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_scalar)
@@ -65,36 +69,36 @@ impl State {
         (aggregate_nonce, signature)
     }
 
-    pub fn schnorr_serial_cache(&mut self, counter: u16) -> Vec<Vec<u8>> {
-        let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::CacheNonce(counter));
+    pub fn schnorr_exchange_cache(&mut self, counter: u16) -> Vec<Vec<u8>> {
+        let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::CacheNonce(counter));
         self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_bytes)
             .collect()
     }
 
-    pub fn schnorr_serial_reveal(&mut self, counter: u16) -> Vec<Vec<u8>> {
-        let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::RevealNonce(counter));
+    pub fn schnorr_exchange_reveal(&mut self, counter: u16) -> Vec<Vec<u8>> {
+        let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::RevealNonce(counter));
         self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_bytes)
             .collect()
     }
 
-    pub fn schnorr_serial_nonce(&mut self, counter: u16) -> Vec<PublicKey> {
-        let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::GetNonce(counter));
+    pub fn schnorr_exchange_nonce(&mut self, counter: u16) -> Vec<PublicKey> {
+        let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::GetNonce(counter));
         self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_public_key)
             .collect()
     }
 
-    pub fn schnorr_serial_sign_reveal(&mut self, counter: u16, nonce: PublicKey, message: [u8; 32]) -> ((PublicKey, Scalar), Vec<Vec<u8>>) {
-        let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::SignReveal(counter, nonce.clone(), message));
+    pub fn schnorr_exchange_sign_reveal(&mut self, counter: u16, nonce: PublicKey, message: [u8; 32]) -> ((PublicKey, Scalar), Vec<Vec<u8>>) {
+        let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::SignReveal(counter, nonce.clone(), message));
         let mut signature = Scalar::zero();
         let mut decryption_keys: Vec<Vec<u8>> = Vec::new();
         for response in self.broadcast(msg) {
-            if let ProtocolData::SchnorrSerial(SchnorrSerialData::SignatureNonceKey(sign, decryption_key)) = response {
+            if let ProtocolData::SchnorrExchange(SchnorrExchangeData::SignatureNonceKey(sign, decryption_key)) = response {
                 signature = signature.add(&sign);
                 decryption_keys.push(decryption_key);
             } else {
@@ -105,7 +109,7 @@ impl State {
     }
 
     pub fn schnorr_commitment_commit(&mut self, message: [u8; 32]) -> Vec<Vec<u8>> {
-        let msg = ProtocolMessage::SchnorrCommitment(SchnorrCommitment::CommitNonce(message));
+        let msg = ProtocolMessage::SchnorrCommit(SchnorrCommit::CommitNonce(message));
         self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_bytes)
@@ -113,7 +117,7 @@ impl State {
     }
 
     pub fn schnorr_commitment_reveal(&mut self, commitments: Vec<Vec<u8>>) -> Vec<PublicKey> {
-        let msg = ProtocolMessage::SchnorrCommitment(SchnorrCommitment::RevealNonce(commitments));
+        let msg = ProtocolMessage::SchnorrCommit(SchnorrCommit::RevealNonce(commitments));
         self.broadcast(msg)
             .into_iter()
             .map(ProtocolData::expect_public_key)
@@ -124,9 +128,9 @@ impl State {
         let aggregate_nonce = fold_points(&nonce_points);
         let mut signature = Scalar::zero();
 
-        let msg = ProtocolMessage::SchnorrCommitment(SchnorrCommitment::Sign(nonce_points));
+        let msg = ProtocolMessage::SchnorrCommit(SchnorrCommit::Sign(nonce_points));
         for data in self.broadcast(msg) {
-            if let ProtocolData::SchnorrCommitment(SchnorrCommitmentData::Signature(nonce_point, s)) = data {
+            if let ProtocolData::SchnorrCommit(SchnorrCommitData::Signature(nonce_point, s)) = data {
                 signature = signature.add(&s);
                 assert_eq!(nonce_point, aggregate_nonce);
             } else {
@@ -168,45 +172,45 @@ impl State {
     }
 
     pub fn interop_commit_sign(&mut self, counter: u16, message: [u8; 32]) -> (PublicKey, Scalar) {
-        let mut serial_clients = Vec::new();
+        let mut exchange_clients = Vec::new();
         let mut commitment_clients = Vec::new();
         for (idx, client) in self.clients.iter().enumerate() {
-            if client.is_supported(Protocol::SchnorrSerial) {
-                serial_clients.push(idx);
-            } else if client.is_supported(Protocol::SchnorrCommitment) {
+            if client.is_supported(Protocol::SchnorrCommit) {
                 commitment_clients.push(idx);
+            } else if client.is_supported(Protocol::SchnorrExchange) {
+                exchange_clients.push(idx);
             } else {
                 panic!();
             }
         }
 
         let mut nonces = Vec::new();
-        for idx in &serial_clients {
-            let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::GetNonce(counter));
+        for idx in &exchange_clients {
+            let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::GetNonce(counter));
             nonces.push(self.clients[*idx].process(msg).expect_public_key());
         }
 
         let mut commitments: Vec<_> = nonces.iter().map(hash_point).collect();
 
         for idx in &commitment_clients {
-            let msg = ProtocolMessage::SchnorrCommitment(SchnorrCommitment::CommitNonce(message));
+            let msg = ProtocolMessage::SchnorrCommit(SchnorrCommit::CommitNonce(message));
             commitments.push(self.clients[*idx].process(msg).expect_bytes());
         }
 
         for idx in &commitment_clients {
-            let msg = ProtocolMessage::SchnorrCommitment(SchnorrCommitment::RevealNonce(commitments.clone()));
+            let msg = ProtocolMessage::SchnorrCommit(SchnorrCommit::RevealNonce(commitments.clone()));
             nonces.push(self.clients[*idx].process(msg).expect_public_key());
         }
 
         let nonce = fold_points(&nonces);
 
         let mut signatures = Vec::new();
-        for idx in &serial_clients {
-            let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::Sign(counter, nonce.clone(), message));
+        for idx in &exchange_clients {
+            let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::Sign(counter, nonce.clone(), message));
             signatures.push(self.clients[*idx].process(msg).expect_scalar());
         }
         for idx in &commitment_clients {
-            let msg = ProtocolMessage::SchnorrCommitment(SchnorrCommitment::Sign(nonces.clone()));
+            let msg = ProtocolMessage::SchnorrCommit(SchnorrCommit::Sign(nonces.clone()));
             signatures.push(self.clients[*idx].process(msg).expect_scalar());
         }
 
@@ -216,21 +220,21 @@ impl State {
     }
 
     pub fn interop_delin_sign(&mut self, counter: u16, message: [u8; 32]) -> (PublicKey, Scalar) {
-        let mut serial_clients = Vec::new();
+        let mut exchange_clients = Vec::new();
         let mut delin_clients = Vec::new();
         for (idx, client) in self.clients.iter().enumerate() {
-            if client.is_supported(Protocol::SchnorrSerial) {
-                serial_clients.push(idx);
-            } else if client.is_supported(Protocol::SchnorrDelin) {
+            if client.is_supported(Protocol::SchnorrDelin) {
                 delin_clients.push(idx);
+            } else if client.is_supported(Protocol::SchnorrExchange) {
+                exchange_clients.push(idx);
             } else {
                 panic!();
             }
         }
 
         let mut nonces = Vec::new();
-        for idx in &serial_clients {
-            let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::GetNonce(counter));
+        for idx in &exchange_clients {
+            let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::GetNonce(counter));
             nonces.push(self.clients[*idx].process(msg).expect_public_key());
         }
         let rng = OsRng::default();
@@ -255,8 +259,8 @@ impl State {
         let (coeff, nonce) = compute_delin(&combine_prenonces(&prenonces), message);
 
         let mut signatures = Vec::new();
-        for idx in &serial_clients {
-            let msg = ProtocolMessage::SchnorrSerial(SchnorrSerial::Sign(counter, nonce.clone(), message));
+        for idx in &exchange_clients {
+            let msg = ProtocolMessage::SchnorrExchange(SchnorrExchange::Sign(counter, nonce.clone(), message));
             signatures.push(self.clients[*idx].process(msg).expect_scalar());
         }
         for idx in &delin_clients {

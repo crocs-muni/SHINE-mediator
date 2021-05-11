@@ -5,7 +5,7 @@ use sha2::{Sha256, Digest};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
-use crate::protocol::{KeygenCommitment, ProtocolMessage, ProtocolData, KeygenCommitmentData, SchnorrSerial, SchnorrSerialData, SchnorrCommitmentData, SchnorrCommitment, Protocol, SchnorrDelin, SchnorrDelinData};
+use crate::protocol::{KeygenCommit, ProtocolMessage, ProtocolData, KeygenCommitData, SchnorrExchange, SchnorrExchangeData, SchnorrCommitData, SchnorrCommit, Protocol, SchnorrDelin, SchnorrDelinData};
 use std::ops::Mul;
 
 pub struct SimulatedClient {
@@ -66,20 +66,20 @@ impl SimulatedClient {
         result
     }
 
-    fn handle_keygen_commitment(&mut self, message: KeygenCommitment) -> KeygenCommitmentData {
+    fn handle_keygen_commitment(&mut self, message: KeygenCommit) -> KeygenCommitData {
         match message {
-            KeygenCommitment::Initialize(group_size) => {
+            KeygenCommit::Initialize(group_size) => {
                 self.group_size = group_size;
                 self.group_secret = Some(SecretKey::random(self.rng));
                 let group_public = self.group_secret.as_ref().unwrap().public_key();
-                KeygenCommitmentData::Commitment(hash_point(&group_public))
+                KeygenCommitData::Commitment(hash_point(&group_public))
             },
-            KeygenCommitment::Reveal(commitments) => {
+            KeygenCommit::Reveal(commitments) => {
                 assert_eq!(self.group_size, commitments.len());
                 self.group_commitments = commitments;
-                KeygenCommitmentData::Reveal(self.group_secret.as_ref().unwrap().public_key())
+                KeygenCommitData::Reveal(self.group_secret.as_ref().unwrap().public_key())
             },
-            KeygenCommitment::Finalize(public_keys) => {
+            KeygenCommit::Finalize(public_keys) => {
                 assert_eq!(self.group_size, public_keys.len());
                 for i in 0..self.group_size {
                     let hash = hash_point(&public_keys.get(i).unwrap());
@@ -95,35 +95,35 @@ impl SimulatedClient {
                         .fold(ProjectivePoint::identity(), |acc, x| acc + x)
                         .to_affine()
                 ).unwrap());
-                KeygenCommitmentData::Result(self.group_key.unwrap())
+                KeygenCommitData::Result(self.group_key.unwrap())
             }
         }
     }
 
-    fn handle_schnorr_serial(&mut self, message: SchnorrSerial) -> SchnorrSerialData {
+    fn handle_schnorr_serial(&mut self, message: SchnorrExchange) -> SchnorrExchangeData {
         match message {
-            SchnorrSerial::GetNonce(counter) => {
+            SchnorrExchange::GetNonce(counter) => {
                 assert!(self.cache_counter <= counter);
                 self.cache_counter = counter;
-                SchnorrSerialData::Nonce(self.prf(counter).public_key())
+                SchnorrExchangeData::Nonce(self.prf(counter).public_key())
             },
-            SchnorrSerial::CacheNonce(counter) => {
+            SchnorrExchange::CacheNonce(counter) => {
                 let nonce = self.prf(counter);
                 let key = self.kdf(&nonce);
                 assert_eq!(key.len(), 64);
-                SchnorrSerialData::EncryptedNonce(key.iter()
+                SchnorrExchangeData::EncryptedNonce(key.iter()
                     .zip(nonce.public_key().to_encoded_point(false).as_bytes()[1..].iter())
                     .map(|(l, r)| *l ^ *r)
                     .collect())
             },
-            SchnorrSerial::RevealNonce(counter) => {
-                SchnorrSerialData::NonceKey(self.schnorr_reveal(counter))
+            SchnorrExchange::RevealNonce(counter) => {
+                SchnorrExchangeData::NonceKey(self.schnorr_reveal(counter))
             },
-            SchnorrSerial::Sign(counter, nonce_point, message) => {
-                SchnorrSerialData::Signature(self.schnorr_sign(counter, nonce_point, message))
+            SchnorrExchange::Sign(counter, nonce_point, message) => {
+                SchnorrExchangeData::Signature(self.schnorr_sign(counter, nonce_point, message))
             },
-            SchnorrSerial::SignReveal(counter, nonce_point, message) => {
-                SchnorrSerialData::SignatureNonceKey(
+            SchnorrExchange::SignReveal(counter, nonce_point, message) => {
+                SchnorrExchangeData::SignatureNonceKey(
                     self.schnorr_sign(counter, nonce_point, message),
                     self.schnorr_reveal(counter + 1)
                 )
@@ -131,19 +131,19 @@ impl SimulatedClient {
         }
     }
 
-    fn handle_schnorr_commitment(&mut self, message: SchnorrCommitment) -> SchnorrCommitmentData {
+    fn handle_schnorr_commitment(&mut self, message: SchnorrCommit) -> SchnorrCommitData {
         match message {
-            SchnorrCommitment::CommitNonce(message) => {
+            SchnorrCommit::CommitNonce(message) => {
                 self.commitment_message = message;
                 self.commitment_secret = Some(SecretKey::random(self.rng));
-                SchnorrCommitmentData::Commitment(hash_point(&self.commitment_secret.as_ref().unwrap().public_key()))
+                SchnorrCommitData::Commitment(hash_point(&self.commitment_secret.as_ref().unwrap().public_key()))
             },
-            SchnorrCommitment::RevealNonce(commitments) => {
+            SchnorrCommit::RevealNonce(commitments) => {
                 assert!(self.commitment_secret.is_some());
                 self.commitment_hashes = commitments;
-                SchnorrCommitmentData::Reveal(self.commitment_secret.as_ref().unwrap().public_key())
+                SchnorrCommitData::Reveal(self.commitment_secret.as_ref().unwrap().public_key())
             },
-            SchnorrCommitment::Sign(nonces) => {
+            SchnorrCommit::Sign(nonces) => {
                 assert_eq!(self.commitment_hashes.len(), nonces.len());
                 for (nonce_point, commitment) in nonces.iter().zip(self.commitment_hashes.iter()) {
                     assert_eq!(&hash_point(nonce_point), commitment);
@@ -159,7 +159,7 @@ impl SimulatedClient {
                 self.commitment_secret = None;
                 self.commitment_hashes = Vec::new();
 
-                SchnorrCommitmentData::Signature(nonce_point, Scalar::from_bytes_reduced(&signature.to_bytes()))
+                SchnorrCommitData::Signature(nonce_point, Scalar::from_bytes_reduced(&signature.to_bytes()))
             },
         }
     }
@@ -204,7 +204,7 @@ impl SimulatedClient {
 
 impl Client for SimulatedClient {
     fn get_info(&mut self) -> Result<String, String> {
-        Ok(format!("SimulatedClient {}", env!("CARGO_PKG_VERSION")))
+        Ok(format!("Simulator {}", env!("CARGO_PKG_VERSION")))
     }
 
     fn get_identity_key(&mut self) -> Result<PublicKey, String> {
@@ -213,18 +213,18 @@ impl Client for SimulatedClient {
 
     fn process(&mut self, msg: ProtocolMessage) -> ProtocolData {
         match msg {
-            ProtocolMessage::KeygenCommitment(msg) => ProtocolData::KeygenCommitment(self.handle_keygen_commitment(msg)),
-            ProtocolMessage::SchnorrSerial(msg) => ProtocolData::SchnorrSerial(self.handle_schnorr_serial(msg)),
-            ProtocolMessage::SchnorrCommitment(msg) => ProtocolData::SchnorrCommitment(self.handle_schnorr_commitment(msg)),
+            ProtocolMessage::KeygenCommit(msg) => ProtocolData::KeygenCommit(self.handle_keygen_commitment(msg)),
+            ProtocolMessage::SchnorrExchange(msg) => ProtocolData::SchnorrExchange(self.handle_schnorr_serial(msg)),
+            ProtocolMessage::SchnorrCommit(msg) => ProtocolData::SchnorrCommit(self.handle_schnorr_commitment(msg)),
             ProtocolMessage::SchnorrDelin(msg) => ProtocolData::SchnorrDelin(self.handle_schnorr_delin(msg)),
         }
     }
 
     fn is_supported(&self, protocol: Protocol) -> bool {
         match protocol {
-            Protocol::KeygenCommitment => true,
-            Protocol::SchnorrSerial => true,
-            Protocol::SchnorrCommitment => true,
+            Protocol::KeygenCommit => true,
+            Protocol::SchnorrExchange => true,
+            Protocol::SchnorrCommit => true,
             Protocol::SchnorrDelin => true,
         }
     }

@@ -1,29 +1,30 @@
 use p256::{PublicKey, Scalar};
 
+#[derive(Copy, Clone)]
 pub enum Protocol {
-    KeygenCommitment,
-    SchnorrSerial,
-    SchnorrCommitment,
+    KeygenCommit,
+    SchnorrExchange,
+    SchnorrCommit,
     SchnorrDelin,
 }
 
 #[derive(Clone)]
 pub enum ProtocolMessage {
-    KeygenCommitment(KeygenCommitment),
-    SchnorrSerial(SchnorrSerial),
-    SchnorrCommitment(SchnorrCommitment),
+    KeygenCommit(KeygenCommit),
+    SchnorrExchange(SchnorrExchange),
+    SchnorrCommit(SchnorrCommit),
     SchnorrDelin(SchnorrDelin)
 }
 
 #[derive(Clone)]
-pub enum KeygenCommitment {
+pub enum KeygenCommit {
     Initialize(usize),
     Reveal(Vec<Vec<u8>>),
     Finalize(Vec<PublicKey>),
 }
 
 #[derive(Clone)]
-pub enum SchnorrSerial {
+pub enum SchnorrExchange {
     GetNonce(u16),
     CacheNonce(u16),
     RevealNonce(u16),
@@ -32,7 +33,7 @@ pub enum SchnorrSerial {
 }
 
 #[derive(Clone)]
-pub enum SchnorrCommitment {
+pub enum SchnorrCommit {
     CommitNonce([u8; 32]),
     RevealNonce(Vec<Vec<u8>>),
     Sign(Vec<PublicKey>)
@@ -45,19 +46,19 @@ pub enum SchnorrDelin {
 }
 
 pub enum ProtocolData {
-    KeygenCommitment(KeygenCommitmentData),
-    SchnorrSerial(SchnorrSerialData),
-    SchnorrCommitment(SchnorrCommitmentData),
+    KeygenCommit(KeygenCommitData),
+    SchnorrExchange(SchnorrExchangeData),
+    SchnorrCommit(SchnorrCommitData),
     SchnorrDelin(SchnorrDelinData),
 }
 
-pub enum KeygenCommitmentData {
+pub enum KeygenCommitData {
     Commitment(Vec<u8>),
     Reveal(PublicKey),
     Result(PublicKey),
 }
 
-pub enum SchnorrSerialData {
+pub enum SchnorrExchangeData {
     Nonce(PublicKey),
     EncryptedNonce(Vec<u8>),
     NonceKey(Vec<u8>),
@@ -65,7 +66,7 @@ pub enum SchnorrSerialData {
     SignatureNonceKey(Scalar, Vec<u8>),
 }
 
-pub enum SchnorrCommitmentData {
+pub enum SchnorrCommitData {
     Commitment(Vec<u8>),
     Reveal(PublicKey),
     Signature(PublicKey, Scalar)
@@ -79,17 +80,17 @@ pub enum SchnorrDelinData {
 impl ProtocolData {
     pub fn expect_bytes(self) -> Vec<u8> {
         match self {
-            ProtocolData::KeygenCommitment(data) => match data {
-                KeygenCommitmentData::Commitment(data) => data,
+            ProtocolData::KeygenCommit(data) => match data {
+                KeygenCommitData::Commitment(data) => data,
                 _ => panic!(),
             }
-            ProtocolData::SchnorrSerial(data) => match data {
-                SchnorrSerialData::EncryptedNonce(data) => data,
-                SchnorrSerialData::NonceKey(data) => data,
+            ProtocolData::SchnorrExchange(data) => match data {
+                SchnorrExchangeData::EncryptedNonce(data) => data,
+                SchnorrExchangeData::NonceKey(data) => data,
                 _ => panic!(),
             },
-            ProtocolData::SchnorrCommitment(data) => match data {
-                SchnorrCommitmentData::Commitment(data) => data,
+            ProtocolData::SchnorrCommit(data) => match data {
+                SchnorrCommitData::Commitment(data) => data,
                 _ => panic!(),
             }
             ProtocolData::SchnorrDelin(_) => panic!(),
@@ -98,17 +99,17 @@ impl ProtocolData {
 
     pub fn expect_public_key(self) -> PublicKey {
         match self {
-            ProtocolData::KeygenCommitment(data) => match data {
-                KeygenCommitmentData::Reveal(data) => data,
-                KeygenCommitmentData::Result(data) => data,
+            ProtocolData::KeygenCommit(data) => match data {
+                KeygenCommitData::Reveal(data) => data,
+                KeygenCommitData::Result(data) => data,
                 _ => panic!(),
             },
-            ProtocolData::SchnorrSerial(data) => match data {
-                SchnorrSerialData::Nonce(data) => data,
+            ProtocolData::SchnorrExchange(data) => match data {
+                SchnorrExchangeData::Nonce(data) => data,
                 _ => panic!(),
             }
-            ProtocolData::SchnorrCommitment(data) => match data {
-                SchnorrCommitmentData::Reveal(data) => data,
+            ProtocolData::SchnorrCommit(data) => match data {
+                SchnorrCommitData::Reveal(data) => data,
                 _ => panic!(),
             },
             ProtocolData::SchnorrDelin(data) => match data {
@@ -120,12 +121,12 @@ impl ProtocolData {
 
     pub fn expect_scalar(self) -> Scalar {
         match self {
-            ProtocolData::SchnorrSerial(data) => match data {
-                SchnorrSerialData::Signature(data) => data,
+            ProtocolData::SchnorrExchange(data) => match data {
+                SchnorrExchangeData::Signature(data) => data,
                 _ => panic!(),
             },
-            ProtocolData::SchnorrCommitment(data) => match data {
-                SchnorrCommitmentData::Signature(_, data) => data,
+            ProtocolData::SchnorrCommit(data) => match data {
+                SchnorrCommitData::Signature(_, data) => data,
                 _ => panic!(),
             }
             ProtocolData::SchnorrDelin(data) => match data {
