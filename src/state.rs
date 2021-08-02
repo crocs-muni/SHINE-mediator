@@ -1,7 +1,7 @@
 use crate::client::Client;
 use crate::client::simulated::{hash_point, compute_delin, combine_prenonces};
 use crate::protocol::{ProtocolMessage, ProtocolData, KeygenCommit, SchnorrExchange, SchnorrExchangeData, SchnorrCommit, SchnorrCommitData, Protocol, SchnorrDelin, SchnorrDelinData};
-use p256::{PublicKey, Scalar, ProjectivePoint, SecretKey};
+use k256::{PublicKey, Scalar, ProjectivePoint, SecretKey};
 use crate::client;
 use std::ops::{Mul, Sub};
 use crate::client::simulated::fold_points;
@@ -270,7 +270,7 @@ impl State {
 
         let mut signature = signatures.iter().fold(Scalar::zero(), |acc, x| acc + x);
         for simulated_nonce in simulated_nonces {
-            signature += coeff.mul(simulated_nonce.secret_scalar() as &Scalar)
+            signature += coeff.mul(&simulated_nonce.to_secret_scalar() as &Scalar)
         }
         (nonce, signature)
     }

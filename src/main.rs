@@ -6,8 +6,8 @@ use client::SimulatedClient;
 use state::State;
 
 use log::{warn, info};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
-use p256::{PublicKey, ProjectivePoint};
+use k256::elliptic_curve::sec1::ToEncodedPoint;
+use k256::{PublicKey, ProjectivePoint};
 use crate::state::{schnorr_verify, decrypt_nonces};
 use crate::protocol::Protocol;
 

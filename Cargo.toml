@@ -10,7 +10,7 @@ edition = "2018"
 pcsc = { version = "2", optional = true }
 log = "0.4"
 env_logger = "0.8"
-p256 = { version = "0.8.0-pre", features = ["arithmetic"] }
+k256 = { version = "0.9", features = ["arithmetic"] }
 hex = "0.4.2"
 rand = "*"
 sha2 = "0.9.3"

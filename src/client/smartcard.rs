@@ -2,8 +2,8 @@ use crate::client::Client;
 use pcsc::Card;
 use log::{info, warn};
 use std::convert::TryInto;
-use p256::{PublicKey, Scalar};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+use k256::{PublicKey, Scalar};
+use k256::elliptic_curve::sec1::ToEncodedPoint;
 use crate::protocol::{KeygenCommit, ProtocolMessage, ProtocolData, KeygenCommitData, SchnorrExchange, SchnorrExchangeData, Protocol};
 
 pub struct SmartcardClient {
@@ -54,28 +54,28 @@ impl SmartcardClient {
     fn handle_keygen_commitment(&mut self, message: KeygenCommit) -> KeygenCommitData {
         match message {
             KeygenCommit::Initialize(group_size) => {
-                let (_, resp) = self.send_apdu(&[0xc1, 0xc0, group_size as u8, 0x00]).unwrap();
+                let (_, resp) = self.send_apdu(&[0x00, 0x01, group_size as u8, 0x00]).unwrap();
                 KeygenCommitData::Commitment(resp.to_vec())
             },
             KeygenCommit::Reveal(commitments) => {
                 for (idx, commitment) in commitments.iter().enumerate() {
-                    let mut data = vec![0xc1, 0xc1, idx as u8, 0x00];
+                    let mut data = vec![0x00, 0x02, idx as u8, 0x00];
                     data.push(commitment.len() as u8);
                     data.extend_from_slice(commitment);
                     self.send_apdu(&data).unwrap();
                 }
-                let (_, resp) = self.send_apdu(&[0xc1, 0xc2, 0x00, 0x00]).unwrap();
+                let (_, resp) = self.send_apdu(&[0x00, 0x03, 0x00, 0x00]).unwrap();
                 KeygenCommitData::Reveal(PublicKey::from_sec1_bytes(resp).unwrap())
             },
             KeygenCommit::Finalize(public_keys) => {
                 for (idx, public_key) in public_keys.iter().enumerate() {
                     let public_key = public_key.to_encoded_point(false).as_bytes().to_vec();
-                    let mut data = vec![0xc1, 0xc3, idx as u8, 0x00];
+                    let mut data = vec![0x00, 0x04, idx as u8, 0x00];
                     data.push(public_key.len() as u8);
                     data.extend_from_slice(&public_key);
                     self.send_apdu(&data).unwrap();
                 }
-                let (_, resp) = self.send_apdu(&[0xc1, 0xc4, 0x00, 0x00]).unwrap();
+                let (_, resp) = self.send_apdu(&[0x00, 0x05, 0x00, 0x00]).unwrap();
                 KeygenCommitData::Result(PublicKey::from_sec1_bytes(resp).unwrap())
             }
         }
@@ -84,25 +84,25 @@ impl SmartcardClient {
     fn handle_schnorr_serial(&mut self, message: SchnorrExchange) -> SchnorrExchangeData {
         match message {
             SchnorrExchange::GetNonce(counter) => {
-                let mut data = vec![0xc1, 0xc5];
+                let mut data = vec![0x00, 0x06];
                 data.extend_from_slice(&u16::to_le_bytes(counter));
                 let (_, resp) = self.send_apdu(&data).unwrap();
                 SchnorrExchangeData::Nonce(PublicKey::from_sec1_bytes(resp).unwrap())
             },
             SchnorrExchange::CacheNonce(counter) => {
-                let mut data = vec![0xc1, 0xc7];
+                let mut data = vec![0x00, 0x07];
                 data.extend_from_slice(&u16::to_le_bytes(counter));
                 let (_, resp) = self.send_apdu(&data).unwrap();
                 SchnorrExchangeData::EncryptedNonce(Vec::from(resp))
             },
             SchnorrExchange::RevealNonce(counter) => {
-                let mut data = vec![0xc1, 0xc8];
+                let mut data = vec![0x00, 0x08];
                 data.extend_from_slice(&u16::to_le_bytes(counter));
                 let (_, resp) = self.send_apdu(&data).unwrap();
                 SchnorrExchangeData::NonceKey(Vec::from(resp))
             },
             SchnorrExchange::Sign(counter, nonce_point, message) => {
-                let mut data = vec![0xc1, 0xc6];
+                let mut data = vec![0x00, 0x09];
                 data.extend_from_slice(&u16::to_le_bytes(counter));
                 let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
                 data.push((nonce_point.len() + message.len()) as u8);
@@ -112,7 +112,7 @@ impl SmartcardClient {
                 SchnorrExchangeData::Signature(Scalar::from_bytes_reduced(resp.into()))
             },
             SchnorrExchange::SignReveal(counter, nonce_point, message) => {
-                let mut data = vec![0xc1, 0xc9];
+                let mut data = vec![0x00, 0x0a];
                 data.extend_from_slice(&u16::to_le_bytes(counter));
                 let nonce_point = nonce_point.to_encoded_point(false).as_bytes().to_vec();
                 data.push((nonce_point.len() + message.len()) as u8);
@@ -130,12 +130,12 @@ impl SmartcardClient {
 
 impl Client for SmartcardClient {
     fn get_info(&mut self) -> Result<String, String> {
-        let (_, resp) = self.send_apdu(b"\xc0\xf0\x00\x00")?;
+        let (_, resp) = self.send_apdu(b"\x00\xf0\x00\x00")?;
         Ok(std::str::from_utf8(resp).map(String::from).unwrap())
     }
 
     fn get_identity_key(&mut self) -> Result<PublicKey, String> {
-        let (_, resp) = self.send_apdu(b"\xc0\xf1\x00\x00")?;
+        let (_, resp) = self.send_apdu(b"\x00\xf1\x00\x00")?;
         match PublicKey::from_sec1_bytes(resp) {
             Ok(identity_key) => Ok(identity_key),
             Err(_) => Err(String::from("Received invalid identity key"))

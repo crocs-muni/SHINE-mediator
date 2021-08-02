@@ -1,4 +1,4 @@
-use p256::{PublicKey, Scalar};
+use k256::{PublicKey, Scalar};
 
 #[derive(Copy, Clone)]
 pub enum Protocol {

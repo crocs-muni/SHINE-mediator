@@ -1,8 +1,8 @@
 use crate::client::Client;
-use p256::{PublicKey, SecretKey, ProjectivePoint, Scalar};
+use k256::{PublicKey, SecretKey, ProjectivePoint, Scalar};
 use rand::rngs::OsRng;
 use sha2::{Sha256, Digest};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+use k256::elliptic_curve::sec1::ToEncodedPoint;
 use std::iter::Iterator;
 use rand::RngCore;
 use crate::protocol::{KeygenCommit, ProtocolMessage, ProtocolData, KeygenCommitData, SchnorrExchange, SchnorrExchangeData, SchnorrCommitData, SchnorrCommit, Protocol, SchnorrDelin, SchnorrDelinData};
@@ -150,9 +150,9 @@ impl SimulatedClient {
                 }
 
                 let nonce_point = fold_points(&nonces);
-                let &nonce = self.commitment_secret.as_ref().unwrap().secret_scalar();
+                let nonce = self.commitment_secret.as_ref().unwrap().to_secret_scalar();
                 let challenge = compute_challenge(&nonce_point, &self.group_key.unwrap(), self.commitment_message);
-                let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
+                let product = challenge.mul(&self.group_secret.as_ref().unwrap().to_secret_scalar() as &Scalar);
                 let signature = nonce.add(&product);
 
                 self.commitment_message.iter_mut().for_each(|x| *x = 0);
@@ -176,10 +176,10 @@ impl SimulatedClient {
             SchnorrDelin::Sign(prenonces, message) => {
                 let prenonces = combine_prenonces(&prenonces);
                 let (coeff, nonce_point) = compute_delin(&prenonces, message);
-                let nonce = &self.delin_prenonces.as_ref().unwrap().0.secret_scalar() as &Scalar;
-                let nonce = nonce + &coeff.mul(&self.delin_prenonces.as_ref().unwrap().1.secret_scalar() as &Scalar);
+                let nonce = &self.delin_prenonces.as_ref().unwrap().0.to_secret_scalar() as &Scalar;
+                let nonce = nonce + &coeff.mul(&self.delin_prenonces.as_ref().unwrap().1.to_secret_scalar() as &Scalar);
                 let challenge = compute_challenge(&nonce_point, &self.group_key.unwrap(), message);
-                let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
+                let product = challenge.mul(&self.group_secret.as_ref().unwrap().to_secret_scalar() as &Scalar);
                 let signature = nonce.add(&product);
                 SchnorrDelinData::Signature(nonce_point, Scalar::from_bytes_reduced(&signature.to_bytes()))
             }
@@ -188,9 +188,9 @@ impl SimulatedClient {
 
     fn schnorr_sign(&mut self, counter: u16, nonce_point: PublicKey, message: [u8; 32]) -> Scalar {
         assert!(counter >= self.cache_counter);
-        let &nonce = self.prf(counter).secret_scalar();
+        let nonce = self.prf(counter).to_secret_scalar();
         let challenge = compute_challenge(&nonce_point, &self.group_key.unwrap(), message);
-        let product = challenge.mul(self.group_secret.as_ref().unwrap().secret_scalar() as &Scalar);
+        let product = challenge.mul(&self.group_secret.as_ref().unwrap().to_secret_scalar() as &Scalar);
         let signature = nonce.add(&product);
         Scalar::from_bytes_reduced(&signature.to_bytes())
     }

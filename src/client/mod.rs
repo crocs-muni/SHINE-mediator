@@ -6,7 +6,7 @@ pub mod simulated;
 pub use smartcard::SmartcardClient;
 pub use simulated::SimulatedClient;
 
-use p256::PublicKey;
+use k256::PublicKey;
 use crate::protocol::{ProtocolMessage, ProtocolData, Protocol};
 
 pub trait Client {
