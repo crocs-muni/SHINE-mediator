@@ -5,9 +5,10 @@ mod protocol;
 use client::SimulatedClient;
 use state::State;
 
-use log::{warn, info};
+use log::{error, warn, info};
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::{PublicKey, ProjectivePoint};
+use clap::{Arg, App};
 use crate::state::{schnorr_verify, decrypt_nonces};
 use crate::protocol::Protocol;
 
@@ -15,7 +16,6 @@ use crate::protocol::Protocol;
 fn connect_smartcard_clients(state: &mut State) -> Result<(), String> {
     use client::SmartcardClient;
     use pcsc::{Context, Scope, ShareMode, Protocols};
-    use log::error;
 
     let ctx = match Context::establish(Scope::User) {
         Ok(ctx) => ctx,
@@ -60,9 +60,9 @@ fn connect_smartcard_clients(state: &mut State) -> Result<(), String> {
     Ok(())
 }
 
-fn main() -> Result<(), String> {
-    env_logger::init();
-    info!("Starting");
+fn run_tests() -> Result<(), String> {
+    info!("Functionality tests start");
+
     let mut state = State::new();
 
     #[cfg(feature = "smartcard")]
@@ -173,6 +173,37 @@ fn main() -> Result<(), String> {
         info!("Interoperability with nonce delinearization successful");
     } else {
         warn!("Interoperability with nonce delinearization failed");
+    }
+
+    info!("Functionality tests ended");
+    Ok(())
+}
+
+fn main() -> Result<(), String> {
+    let matches = App::new(clap::crate_name!())
+        .version(clap::crate_version!())
+        .author(clap::crate_authors!())
+        .about(clap::crate_description!())
+        .arg(Arg::new("test")
+            .long("test")
+            .about("Run functionality tests and exit")
+            .takes_value(false))
+        .arg(Arg::new("command")
+            .long("command")
+            .short('c')
+            .about("Send command to a running instance of mpcd")
+        )
+        .get_matches();
+
+    env_logger::init();
+    info!("Starting");
+
+    if matches.is_present("test") {
+        run_tests()?;
+    } else if matches.is_present("command") {
+        // TODO command handling
+    } else {
+        // TODO daemonize
     }
 
     info!("Terminating");

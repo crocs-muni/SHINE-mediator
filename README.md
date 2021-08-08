@@ -18,12 +18,12 @@ Currently, `mpcd` supports distributed key generation and multiple approaches to
 
 ## Usage
 
-Clone the repository and run `cargo run` (requires Rust compiler) which builds the project and runs the `mpcd` demonstration.
+Clone the repository and run `cargo run -- --tests` (requires Rust compiler) which builds the project and runs `mpcd` functionality tests.
 
 To view detailed log info, set environment variable `RUST_LOG=info`.
 
 ```bash
-↪ RUST_LOG=info cargo run
+↪ RUST_LOG=info cargo run -- --test
     Finished dev [unoptimized + debuginfo] target(s) in 0.03s
      Running `target/debug/mpcd`
 [2021-05-12T09:28:58Z INFO  mpcd] Starting

@@ -21,4 +21,4 @@ jobs:
     - name: Run tests
       run: cargo test --no-default-features --verbose
     - name: Run main
-      run: cargo run --no-default-features --verbose
+      run: cargo run --no-default-features --verbose -- --test
