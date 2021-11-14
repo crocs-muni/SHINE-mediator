@@ -2,19 +2,19 @@
 name = "mpcd"
 version = "0.1.0"
 authors = ["Antonín Dufka <xdufka1@fi.muni.cz>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = "3.0.0-beta.2"
+clap = "3.0.0-beta.5"
 pcsc = { version = "2", optional = true }
 log = "0.4"
-env_logger = "0.8"
+env_logger = "0.9"
 k256 = { version = "0.9", features = ["arithmetic"] }
-hex = "0.4.2"
+hex = "0.4"
 rand = "*"
-sha2 = "0.9.3"
+sha2 = "0.9"
 
 [features]
 default = ["smartcard"]
