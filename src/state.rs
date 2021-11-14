@@ -8,7 +8,7 @@ use crate::client::simulated::fold_points;
 use rand::rngs::OsRng;
 
 pub struct State {
-    pub clients: Vec<Box<dyn Client>>
+    pub clients: Vec<Box<dyn Client + Send + Sync>>
 }
 
 impl State {
@@ -16,7 +16,7 @@ impl State {
         State { clients: Vec::new() }
     }
 
-    pub fn add_client(&mut self, client: Box<dyn Client>) {
+    pub fn add_client(&mut self, client: Box<dyn Client + Send + Sync>) {
         self.clients.push(client);
     }
 

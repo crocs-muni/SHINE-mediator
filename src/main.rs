@@ -1,38 +1,16 @@
-use clap::{App, Arg};
-use log::info;
-use tonic::{Request, Response, Status, transport::Server};
-
-use proto::{IdentityRequest, IdentityResponse};
-use proto::node_server::{Node, NodeServer};
-
 mod state;
 mod client;
 mod protocol;
 mod commands;
+mod rpc;
 
-pub mod proto {
+mod proto {
     tonic::include_proto!("mpcp");
 }
 
-#[derive(Debug, Default)]
-pub struct NodeService {}
+use clap::{App, Arg};
 
-#[tonic::async_trait]
-impl Node for NodeService {
-    async fn get_identity(
-        &self,
-        request: Request<IdentityRequest>,
-    ) -> Result<Response<IdentityResponse>, Status> {
-        println!("Got a request: {:?}", request);
-
-        let resp = proto::IdentityResponse {
-            identity_key: "Response".into()
-        };
-
-        Ok(Response::new(resp))
-    }
-}
-
+use crate::state::State;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -52,24 +30,13 @@ async fn main() -> Result<(), String> {
         .get_matches();
 
     env_logger::init();
-    info!("Starting");
+    let state = State::new();
 
     if matches.is_present("test") {
-        commands::test::run_tests()?;
+        commands::test::run_tests()
     } else if matches.is_present("command") {
-        // TODO command handling
+        Ok(()) // TODO command handling
     } else {
-        let addr = "127.0.0.1:1337".parse().unwrap();
-
-        let node = NodeService::default();
-
-        Server::builder()
-            .add_service(NodeServer::new(node))
-            .serve(addr)
-            .await
-            .unwrap();
+        rpc::run_rpc(state).await
     }
-
-    info!("Terminating");
-    Ok(())
 }
