@@ -9,8 +9,16 @@ use log::{error, warn, info};
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::{PublicKey, ProjectivePoint};
 use clap::{Arg, App};
-use crate::state::{schnorr_verify, decrypt_nonces};
-use crate::protocol::Protocol;
+use state::{schnorr_verify, decrypt_nonces};
+use protocol::Protocol;
+use tonic::{transport::Server, Request, Response, Status};
+
+pub mod proto {
+    tonic::include_proto!("mpcp");
+}
+
+use proto::{IdentityRequest, IdentityResponse};
+use proto::node_server::{Node, NodeServer};
 
 #[cfg(feature = "smartcard")]
 fn connect_smartcard_clients(state: &mut State) -> Result<(), String> {
@@ -179,7 +187,28 @@ fn run_tests() -> Result<(), String> {
     Ok(())
 }
 
-fn main() -> Result<(), String> {
+#[derive(Debug, Default)]
+pub struct NodeService {}
+
+#[tonic::async_trait]
+impl Node for NodeService {
+    async fn get_identity(
+        &self,
+        request: Request<IdentityRequest>,
+    ) -> Result<Response<IdentityResponse>, Status> {
+        println!("Got a request: {:?}", request);
+
+        let resp = proto::IdentityResponse {
+            identity_key: "Response".into()
+        };
+
+        Ok(Response::new(resp))
+    }
+}
+
+
+#[tokio::main]
+async fn main() -> Result<(), String> {
     let matches = App::new(clap::crate_name!())
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
@@ -203,7 +232,15 @@ fn main() -> Result<(), String> {
     } else if matches.is_present("command") {
         // TODO command handling
     } else {
-        // TODO daemonize
+        let addr = "127.0.0.1:1337".parse().unwrap();
+
+        let node = NodeService::default();
+
+        Server::builder()
+            .add_service(NodeServer::new(node))
+            .serve(addr)
+            .await
+            .unwrap();
     }
 
     info!("Terminating");

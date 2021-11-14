@@ -15,6 +15,12 @@ k256 = { version = "0.9", features = ["arithmetic"] }
 hex = "0.4"
 rand = "*"
 sha2 = "0.9"
+tonic = "0.6"
+prost = "0.9"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+
+[build-dependencies]
+tonic-build = "0.6"
 
 [features]
 default = ["smartcard"]

@@ -1,0 +1,12 @@
+syntax = "proto3";
+package mpcp;
+
+service Node {
+    rpc GetIdentity(IdentityRequest) returns (IdentityResponse);
+}
+
+message IdentityRequest {}
+
+message IdentityResponse {
+    bytes identity_key = 1;
+}
