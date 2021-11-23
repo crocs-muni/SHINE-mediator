@@ -142,6 +142,10 @@ impl Client for SmartcardClient {
         }
     }
 
+    fn get_supported(&self) -> Vec<ProtocolIdentifier> {
+        unimplemented!()
+    }
+
     fn process(&mut self, msg: ProtocolMessage) -> ProtocolData {
         match msg {
             ProtocolMessage::KeygenCommit(msg) => ProtocolData::KeygenCommit(self.handle_keygen_commitment(msg)),

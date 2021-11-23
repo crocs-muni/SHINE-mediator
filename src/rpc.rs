@@ -1,17 +1,19 @@
 use tonic::{Request, Response, Status, transport::Server};
 use log::info;
+use k256::elliptic_curve::sec1::ToEncodedPoint;
+use tokio::sync::Mutex;
 
-use crate::proto::{InfoRequest, Info, GroupRequest, Group, SignRequest, Signature};
+use crate::proto::{InfoRequest, Info, GroupRequest, Group, SignRequest, Signature, Device};
 use crate::proto::node_server::{Node, NodeServer};
 use crate::state::State;
 
 pub struct NodeService {
-    state: State
+    state: Mutex<State>
 }
 
 impl NodeService {
-    pub fn new(state: State) -> Self {
-        NodeService { state }
+    pub fn new(mut state: State) -> Self {
+        NodeService { state: Mutex::new(state) }
     }
 }
 
@@ -19,9 +21,20 @@ impl NodeService {
 impl Node for NodeService {
     async fn get_info(&self, request: Request<InfoRequest>) -> Result<Response<Info>, Status> {
         info!("RPC Request: {:?}", request);
+        let mut state = self.state.lock().await;
+
+        let mut devices = Vec::new();
+        for client in state.clients.iter_mut() {
+            let key = client.get_identity_key().unwrap();
+            let encoded = key.to_encoded_point(true);
+            devices.push(Device {
+                identity_key: encoded.as_bytes().to_vec(),
+                supported_protocols: client.get_supported().iter().map(|x| *x as i32).collect()
+            });
+        }
 
         let resp = Info {
-            devices: Vec::new()
+            devices
         };
 
         Ok(Response::new(resp))

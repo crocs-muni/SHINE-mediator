@@ -7,6 +7,7 @@ use std::iter::Iterator;
 use rand::RngCore;
 use crate::protocol::{KeygenCommit, ProtocolMessage, ProtocolData, KeygenCommitData, SchnorrExchange, SchnorrExchangeData, SchnorrCommitData, SchnorrCommit, Protocol, SchnorrDelin, SchnorrDelinData};
 use std::ops::Mul;
+use crate::proto::ProtocolIdentifier;
 
 pub struct SimulatedClient {
     rng: OsRng,
@@ -209,6 +210,14 @@ impl Client for SimulatedClient {
 
     fn get_identity_key(&mut self) -> Result<PublicKey, String> {
         Ok(self.identity_secret.public_key())
+    }
+
+    fn get_supported(&self) -> Vec<ProtocolIdentifier> {
+        vec![
+            ProtocolIdentifier::Ecdsa,
+            ProtocolIdentifier::Eddsa,
+            ProtocolIdentifier::Bipschnorr,
+        ]
     }
 
     fn process(&mut self, msg: ProtocolMessage) -> ProtocolData {

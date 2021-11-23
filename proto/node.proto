@@ -44,13 +44,7 @@ message Protocol {
     optional uint32 threshold = 3;
 }
 
-message ProtocolIdentifier {
-    oneof type {
-        SignProtocolIdentifier sign = 1;
-    }
-}
-
-enum SignProtocolIdentifier {
+enum ProtocolIdentifier {
     ECDSA = 0;
     EDDSA = 1;
     BIPSCHNORR = 2;
