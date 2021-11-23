@@ -1,7 +1,7 @@
 use tonic::{Request, Response, Status, transport::Server};
 use log::info;
 
-use crate::proto::{IdentityRequest, IdentityResponse};
+use crate::proto::{InfoRequest, Info, GroupRequest, Group, SignRequest, Signature};
 use crate::proto::node_server::{Node, NodeServer};
 use crate::state::State;
 
@@ -17,11 +17,34 @@ impl NodeService {
 
 #[tonic::async_trait]
 impl Node for NodeService {
-    async fn get_identity(&self, request: Request<IdentityRequest>) -> Result<Response<IdentityResponse>, Status> {
+    async fn get_info(&self, request: Request<InfoRequest>) -> Result<Response<Info>, Status> {
         info!("RPC Request: {:?}", request);
 
-        let resp = IdentityResponse {
-            identity_key: "Response".into()
+        let resp = Info {
+            devices: Vec::new()
+        };
+
+        Ok(Response::new(resp))
+    }
+
+    async fn establish_group(&self, request: Request<GroupRequest>) -> Result<Response<Group>, Status> {
+        info!("RPC Request: {:?}", request);
+
+        let data = request.into_inner();
+        let resp = Group {
+            protocol: data.protocol,
+            devices: data.devices,
+            group_key: "GroupKey".into()
+        };
+
+        Ok(Response::new(resp))
+    }
+
+    async fn sign(&self, request: Request<SignRequest>) -> Result<Response<Signature>, Status> {
+        info!("RPC Request: {:?}", request);
+
+        let resp = Signature {
+            signature: "Signature".into()
         };
 
         Ok(Response::new(resp))
