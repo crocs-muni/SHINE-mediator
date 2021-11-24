@@ -8,7 +8,6 @@ use rand::RngCore;
 use crate::protocol::{Protocol, ProtocolMessage, ProtocolData, ECDSA, ECDSAData};
 
 pub struct SimulatedClient {
-    rng: OsRng,
     identity_secret: SecretKey,
 }
 
@@ -19,7 +18,6 @@ impl SimulatedClient {
         cache_secret.resize(32, 0);
         rng.fill_bytes(&mut cache_secret);
         SimulatedClient {
-            rng,
             identity_secret: SecretKey::random(rng)
         }
     }
@@ -27,7 +25,6 @@ impl SimulatedClient {
     fn handle_ecdsa(&mut self, msg: ECDSA) -> ECDSAData {
         match msg {
             ECDSA::Keygen => {
-                self.identity_secret = SecretKey::random(self.rng);
                 ECDSAData::Key(self.identity_secret.public_key())
             }
             ECDSA::Sign(public_key, msg) => {

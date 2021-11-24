@@ -1,6 +1,6 @@
 use tonic::{Request, Response, Status, transport::Server};
 use log::info;
-use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::{PublicKey, elliptic_curve::sec1::ToEncodedPoint};
 use tokio::sync::Mutex;
 
 use crate::proto::{InfoRequest, Info, GroupRequest, Group, SignRequest, Signature, Device, ProtocolIdentifier};
@@ -13,7 +13,7 @@ pub struct NodeService {
 }
 
 impl NodeService {
-    pub fn new(state: State) -> Self {
+    pub fn new(mut state: State) -> Self {
         NodeService { state: Mutex::new(state) }
     }
 }
@@ -47,14 +47,19 @@ impl Node for NodeService {
         let mut data = request.into_inner();
         let protocol = data.protocol.as_ref().unwrap();
         let mut group_key: Vec<u8> = Vec::new();
+        let mut identifiers: Vec<Vec<u8>> = Vec::new();
+
         let mut state = self.state.lock().await;
         for device in data.devices.iter_mut() {
-            let device = state.clients.get_mut(&device.identity_key).unwrap();
-            assert!(device.is_supported(proto_to_protocol(protocol.identifier)));
+            let client = state.clients.get_mut(&device.identity_key).unwrap();
+            assert!(client.is_supported(proto_to_protocol(protocol.identifier)));
             let message = ProtocolMessage::ECDSA(ECDSA::Keygen);
-            let key = device.process(message).expect_public_key();
+            let key = client.process(message).expect_public_key();
+            identifiers.push(device.identity_key.clone());
             group_key.extend(key.to_encoded_point(false).as_bytes());
         }
+
+        state.add_group(group_key.clone(), identifiers);
 
         let resp = Group {
             protocol: data.protocol,
@@ -68,9 +73,20 @@ impl Node for NodeService {
     async fn sign(&self, request: Request<SignRequest>) -> Result<Response<Signature>, Status> {
         info!("RPC Request: {:?}", request);
 
-        let resp = Signature {
-            signature: "Signature".into()
-        };
+        let mut data = request.into_inner();
+        let group_key = data.group_key;
+
+        let mut state = self.state.lock().await;
+        let identifiers = state.groups.get(&group_key).unwrap().clone();
+
+        let mut signature = Vec::new();
+        for identifier in identifiers.iter() {
+            let mut client = state.clients.get_mut(identifier).unwrap();
+            let message = ProtocolMessage::ECDSA(ECDSA::Sign(PublicKey::from_sec1_bytes(&identifier).unwrap(), "Message".as_bytes().into()));
+            signature.extend(client.process(message).expect_bytes());
+        }
+
+        let resp = Signature { signature };
 
         Ok(Response::new(resp))
     }

@@ -25,7 +25,7 @@ message Group {
 }
 
 message SignRequest {
-    Group group = 1;
+    bytes group_key = 1;
     bytes message = 2;
 }
 
