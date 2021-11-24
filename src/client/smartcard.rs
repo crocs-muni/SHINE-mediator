@@ -2,7 +2,7 @@ use crate::client::Client;
 use pcsc::Card;
 use log::{info, warn};
 use std::convert::TryInto;
-use k256::PublicKey;
+use p256::PublicKey;
 use crate::protocol::{ProtocolMessage, ProtocolData, Protocol};
 
 pub struct SmartcardClient {

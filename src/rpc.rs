@@ -1,6 +1,6 @@
 use tonic::{Request, Response, Status, transport::Server};
 use log::info;
-use k256::elliptic_curve::sec1::ToEncodedPoint;
+use p256::elliptic_curve::sec1::ToEncodedPoint;
 use tokio::sync::Mutex;
 
 use crate::proto::{InfoRequest, Info, GroupRequest, Group, SignRequest, Signature, Device, ProtocolIdentifier};

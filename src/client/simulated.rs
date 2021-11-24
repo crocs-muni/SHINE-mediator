@@ -1,7 +1,9 @@
 use crate::client::Client;
-use k256::{PublicKey, SecretKey, ProjectivePoint, Scalar};
+use p256::{
+    ecdsa::{SigningKey, signature::Signer},
+    PublicKey, SecretKey
+};
 use rand::rngs::OsRng;
-use std::iter::Iterator;
 use rand::RngCore;
 use crate::protocol::{Protocol, ProtocolMessage, ProtocolData, ECDSA, ECDSAData};
 
@@ -23,7 +25,17 @@ impl SimulatedClient {
     }
 
     fn handle_ecdsa(&mut self, msg: ECDSA) -> ECDSAData {
-        unimplemented!()
+        match msg {
+            ECDSA::Keygen => {
+                self.identity_secret = SecretKey::random(self.rng);
+                ECDSAData::Key(self.identity_secret.public_key())
+            }
+            ECDSA::Sign(public_key, msg) => {
+                assert_eq!(public_key, self.identity_secret.public_key());
+                let signing_key = SigningKey::from(&self.identity_secret);
+                ECDSAData::Signature(signing_key.sign(&msg).to_der().as_bytes().into())
+            }
+        }
     }
 }
 
