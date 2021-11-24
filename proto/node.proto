@@ -46,6 +46,4 @@ message Protocol {
 
 enum ProtocolIdentifier {
     ECDSA = 0;
-    EDDSA = 1;
-    BIPSCHNORR = 2;
 }

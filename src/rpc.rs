@@ -3,16 +3,17 @@ use log::info;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use tokio::sync::Mutex;
 
-use crate::proto::{InfoRequest, Info, GroupRequest, Group, SignRequest, Signature, Device};
+use crate::proto::{InfoRequest, Info, GroupRequest, Group, SignRequest, Signature, Device, ProtocolIdentifier};
 use crate::proto::node_server::{Node, NodeServer};
 use crate::state::State;
+use crate::protocol::Protocol;
 
 pub struct NodeService {
     state: Mutex<State>
 }
 
 impl NodeService {
-    pub fn new(mut state: State) -> Self {
+    pub fn new(state: State) -> Self {
         NodeService { state: Mutex::new(state) }
     }
 }
@@ -29,7 +30,7 @@ impl Node for NodeService {
             let encoded = key.to_encoded_point(true);
             devices.push(Device {
                 identity_key: encoded.as_bytes().to_vec(),
-                supported_protocols: client.get_supported().iter().map(|x| *x as i32).collect()
+                supported_protocols: client.get_supported().into_iter().map(protocol_to_proto).collect()
             });
         }
 
@@ -75,4 +76,10 @@ pub async fn run_rpc(state: State) -> Result<(), String> {
         .unwrap();
 
     Ok(())
+}
+
+fn protocol_to_proto(protocol: Protocol) -> i32 {
+    match protocol {
+        Protocol::ECDSA => ProtocolIdentifier::Ecdsa as i32
+    }
 }
