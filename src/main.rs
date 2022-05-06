@@ -8,7 +8,7 @@ use state::State;
 use log::{error, warn, info};
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::{PublicKey, ProjectivePoint};
-use clap::{Arg, App};
+use clap::{Arg, Command};
 use crate::state::{schnorr_verify, decrypt_nonces};
 use crate::protocol::Protocol;
 
@@ -180,13 +180,13 @@ fn run_tests() -> Result<(), String> {
 }
 
 fn main() -> Result<(), String> {
-    let matches = App::new("SHINE-mediator")
+    let matches = Command::new("SHINE-mediator")
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
         .about(clap::crate_description!())
         .arg(Arg::new("test")
             .long("test")
-            .about("Run functionality tests and exit")
+            .help("Run functionality tests and exit")
             .takes_value(false))
         .get_matches();
 

@@ -18,7 +18,7 @@ Currently, `mediator` supports distributed key generation with commitment and mu
 
 ## Usage
 
-Clone the repository and run `cargo run -- --tests` (requires Rust compiler) which builds the project and runs `mediator` functionality tests.
+Clone the repository and run `cargo run -- --test` (requires Rust compiler) which builds the project and runs `mediator` functionality tests.
 
 To view detailed log info, set environment variable `RUST_LOG=info`.
 
