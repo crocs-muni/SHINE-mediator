@@ -180,7 +180,7 @@ fn run_tests() -> Result<(), String> {
 }
 
 fn main() -> Result<(), String> {
-    let matches = App::new(clap::crate_name!())
+    let matches = App::new("SHINE-mediator")
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
         .about(clap::crate_description!())
@@ -188,11 +188,6 @@ fn main() -> Result<(), String> {
             .long("test")
             .about("Run functionality tests and exit")
             .takes_value(false))
-        .arg(Arg::new("command")
-            .long("command")
-            .short('c')
-            .about("Send command to a running instance of mpcd")
-        )
         .get_matches();
 
     env_logger::init();
@@ -200,10 +195,6 @@ fn main() -> Result<(), String> {
 
     if matches.is_present("test") {
         run_tests()?;
-    } else if matches.is_present("command") {
-        // TODO command handling
-    } else {
-        // TODO daemonize
     }
 
     info!("Terminating");

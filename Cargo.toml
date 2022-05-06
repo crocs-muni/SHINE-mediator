@@ -1,5 +1,5 @@
 [package]
-name = "mpcd"
+name = "mediator"
 version = "0.1.0"
 authors = ["Antonín Dufka <xdufka1@fi.muni.cz>"]
 edition = "2018"
